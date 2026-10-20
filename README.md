@@ -53,4 +53,4 @@ sudo apt-get install openjdk-21-jdk-headless nodejs android-sdk-platform-23 aapt
 
 本项目源代码采用 [MIT 许可证](LICENSE)，可以自由使用、修改和再发布，但需保留版权声明。
 
-发音录音不在 MIT 许可范围内，按上面的 CC BY 4.0 授权使用。
+发音录音不在 MIT 许可范围内，按上面的 CC BY 4.0 授权使用，详见 [NOTICE](NOTICE)。

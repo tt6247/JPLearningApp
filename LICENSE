@@ -19,23 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
--------------------------------------------------------------------------------
-
-Third-party content / 第三方内容
-
-The MIT License above covers the source code of this project only. The 104
-kana pronunciation recordings in 源码/src/Resources/KanaAudio/ and
-安卓版源码/app/assets/www/audio/ are NOT covered by it. They are:
-
-  Recordings: FUN Japanese Learning (https://funjapaneselearning.com)
-  Dataset:    Arsalan Anwari, "Kana Sounds"
-              https://huggingface.co/datasets/arsalan-anwari/kana-sounds
-  License:    Creative Commons Attribution 4.0 International (CC BY 4.0)
-              https://creativecommons.org/licenses/by/4.0/
-
-The recordings are included unmodified apart from file names. If you
-redistribute them, keep this attribution.
-
-以上 MIT 许可仅适用于本项目的源代码。104 段假名发音录音不在此许可范围内，
-按 CC BY 4.0 授权使用，转发时请保留上述署名。
