@@ -15,3 +15,6 @@ Desktop.ini
 .vs/
 .vscode/
 *.swp
+
+# 上传到 GitHub Releases 用的英文名安装包副本
+发布附件/
