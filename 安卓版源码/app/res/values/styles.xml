@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#F2EDE1</color>
+    <color name="purple">#5F57A8</color>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorAccent">@color/purple</item>
+        <item name="android:colorPrimary">@color/purple</item>
+    </style>
+</resources>

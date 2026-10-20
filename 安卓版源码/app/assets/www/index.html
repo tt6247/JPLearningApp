@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<script>
+/* 首帧前确定主题，避免深色模式下打开时闪一下亮色 */
+(function () {
+  try {
+    var b = window.AndroidBridge, s = b ? b.loadProgress() : localStorage.getItem('kana-small-steps-android-v1');
+    var m = s ? JSON.parse(s).theme : 'system';
+    var sys = b && b.systemDark ? b.systemDark() : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    if (m === 'dark' || (m !== 'light' && sys)) document.documentElement.setAttribute('data-theme', 'dark');
+  } catch (e) {}
+})();
+</script>
+<title>假名小步</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b lang="ja">あ</b>假名小步</div>
+  <button class="pill hidden" id="pill" data-page="today" aria-label="打开今日计划"><span class="dot"></span><span id="pill-time">15:00</span></button>
+  <button class="icon-btn" data-act="theme" aria-label="外观：亮色 / 深色护眼"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg></button>
+  <button class="icon-btn" data-page="help" aria-label="学习指南">?</button>
+</header>
+<main id="view"></main>
+<nav class="tabbar" id="tabbar" aria-label="主导航">
+  <button data-page="today"><i>☀</i>今日</button>
+  <button data-page="table"><i lang="ja">あ</i>五十音</button>
+  <button data-page="cards"><i>▱</i>记忆卡</button>
+  <button data-page="quiz"><i>✓</i>测验</button>
+  <button data-page="errors"><i>↺</i>复习</button>
+</nav>
+<div class="sheet-backdrop hidden" id="backdrop"></div>
+<section class="sheet hidden" id="sheet" role="dialog" aria-modal="true"></section>
+<div class="toast hidden" id="toast" role="status"></div>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

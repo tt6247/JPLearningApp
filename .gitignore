@@ -1,0 +1,17 @@
+# 构建产物（发布的 exe / apk 放在 GitHub Releases，不进仓库）
+dist/
+build/
+*.idsig
+
+# 安卓发布签名：仓库是公开的，密钥只保存在本机，请另外备份
+安卓版源码/signing/*.jks
+安卓版源码/signing/*.keystore
+安卓版源码/signing/keystore.properties
+
+# 系统与编辑器
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vs/
+.vscode/
+*.swp

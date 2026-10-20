@@ -1,0 +1,50 @@
+# 假名小步 · JPLearningApp
+
+面向中文母语、零基础的平假名学习应用，目标是能读懂漫画和轻小说。有 **Windows 桌面版**和**安卓版**两个版本，功能和学习规则保持同步，都能完全离线使用。
+
+当前版本：**2.2.0**。下载安装包请到 [Releases](../../releases)。
+
+## 功能
+
+- **今日计划**：根据学习进度给出当天建议。有错题先复习，再学下一行，然后做一轮测验，最后完成每日专注时长。
+- **五十音表 / 分组学习**：包括清音 46 个、浊音和半浊音 25 个、拗音 33 个。点开任意假名可以查看读音、听发音。
+- **记忆卡**：先回想，再翻开答案核对。
+- **辨认测验**：四选一，每轮最多 10 题。答错的假名自动进入错题本，连续答对两次才会移出。
+- **专注计时**：可选 5、10、15、25 分钟，可设每日目标，有近 7 天柱状图。时间到会提醒休息。
+- **护眼外观**：可选亮色护眼、深色护眼，或跟随系统。两套配色都用暖色调，不用纯白和纯黑。
+- **离线发音**：104 段真人录音内置在应用中，不需要联网，也不需要安装语音包。
+
+## 仓库结构
+
+```
+源码/              Windows 桌面版（C# 5 · WinForms · .NET Framework 4）
+安卓版源码/         安卓版（Java 外壳 + 离线 WebView 页面，核心逻辑 core.js 与桌面版一一对应）
+版本信息.md         开发与维护文档：版本历史、结构、构建、进度文件格式、配色规范、发布清单
+```
+
+## 构建
+
+**Windows 桌面版**：双击 `源码/build.cmd`。只需要系统自带的 .NET Framework 4，编译完会自动运行自检。
+
+**安卓版**：在 Linux 或 WSL 中运行 `安卓版源码/build.sh`。依赖如下：
+
+```
+sudo apt-get install openjdk-21-jdk-headless nodejs android-sdk-platform-23 aapt zipalign apksigner dalvik-exchange
+```
+
+签名密钥不在仓库里，原因和处理方法见 [安卓版源码/signing/README.md](安卓版源码/signing/README.md)。
+
+更多细节都写在 [版本信息.md](版本信息.md) 里。
+
+## 自检
+
+- 桌面版：运行 `假名小步-独立桌面版.exe --self-test <输出目录>`。
+- 安卓版：运行 `node 安卓版源码/tests/core.test.js`。
+
+## 录音来源与授权
+
+- 录音：FUN Japanese Learning（https://funjapaneselearning.com）
+- 数据集整理：Arsalan Anwari，[Kana Sounds](https://huggingface.co/datasets/arsalan-anwari/kana-sounds)
+- 授权：[Creative Commons Attribution 4.0（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)
+
+录音按原样内置，只调整了文件名，以匹配本应用的罗马音显示。
