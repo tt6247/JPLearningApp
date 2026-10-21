@@ -49,6 +49,9 @@ namespace KanaSmallSteps
 
         private float DpiFactor = 1f;
 
+        /// <summary>上一次显示笔顺的假名：同一张卡翻面时不重播动画。</summary>
+        private string LastStrokeKana;
+
         public MainForm(Progress p)
         {
             base.AutoScaleMode = AutoScaleMode.None;
@@ -606,28 +609,65 @@ namespace KanaSmallSteps
             }
             Kana x = Deck[CardIndex];
             Add(Theme.Label("记忆卡  " + (CardIndex + 1) + " / " + Deck.Count, 10f, false, 30));
-            Button button = new Button();
-            button.Text = x.K;
-            button.AccessibleName = (Flipped ? "隐藏答案" : "翻开答案");
-            button.Height = 195;
-            button.Dock = DockStyle.Top;
-            button.BackColor = Theme.Surface;
-            button.ForeColor = Theme.Ink;
-            button.FlatStyle = FlatStyle.Flat;
-            button.Font = new Font("Yu Gothic", 72f);
-            button.Cursor = Cursors.Hand;
-            Button button2 = button;
-            button2.FlatAppearance.BorderColor = Theme.Line;
+            bool hasStrokes = StrokeData.Has(x.K);
+            StrokePanel strokes = null;
+            if (hasStrokes)
+            {
+                // 换到新卡片才自动书写；翻开答案时保持写完的状态
+                strokes = new StrokePanel(x.K, x.K != LastStrokeKana);
+                LastStrokeKana = x.K;
+            }
+            KanaGlyph button2 = new KanaGlyph(x.K, 80f);
+            button2.AccessibleName = x.K + "，" + (Flipped ? "点击隐藏答案" : "点击翻开答案");
+            button2.AccessibleRole = AccessibleRole.PushButton;
+            button2.Height = 195;
+            button2.Dock = DockStyle.Top;
+            button2.Cursor = Cursors.Hand;
+            button2.Clickable = true;
             button2.Click += delegate
             {
                 Flipped = !Flipped;
                 Render();
             };
-            Add(button2);
             Label label = Theme.Label(Flipped ? x.R : "· · ·  点击卡片，核对读音", Flipped ? 28 : 12, Flipped, 58);
             label.TextAlign = ContentAlignment.MiddleCenter;
             label.ForeColor = Theme.Purple;
-            Add(label);
+            if (hasStrokes)
+            {
+                // 卡片左边是大字和读音，右边是笔顺面板（2.3.0）
+                Card card = new Card { Height = Math.Max(380, strokes.Height), Padding = new Padding(1) };
+                TableLayoutPanel row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0), BackColor = Theme.Surface };
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, StrokePanel.PanelWidth));
+                row.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+                Panel face = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = Theme.Surface };
+                button2.Dock = DockStyle.Fill;
+                label.Dock = DockStyle.Bottom;
+                label.Height = 70;
+                label.BackColor = Theme.Surface;
+                label.Cursor = Cursors.Hand;
+                label.Click += delegate
+                {
+                    Flipped = !Flipped;
+                    Render();
+                };
+                face.Controls.Add(button2);
+                face.Controls.Add(label);
+                strokes.Dock = DockStyle.Fill;
+                strokes.Margin = new Padding(0);
+                row.Controls.Add(face, 0, 0);
+                row.Controls.Add(strokes, 1, 0);
+                card.Controls.Add(row);
+                Add(card);
+            }
+            else
+            {
+                Card plain = new Card { Height = 197, Padding = new Padding(1) };
+                button2.Dock = DockStyle.Fill;
+                plain.Controls.Add(button2);
+                Add(plain);
+                Add(label);
+            }
             Add(Actions(Theme.Button("听发音", delegate
             {
                 Speak(x);
@@ -693,10 +733,7 @@ namespace KanaSmallSteps
             }
             Kana x = Test.Current;
             Add(Theme.Label("假名 → 读音     " + (Test.Index + 1) + " / " + Test.Items.Count, 10f, false, 28));
-            Label label = Theme.Label(x.K, 76f, false, 165);
-            label.Font = new Font("Yu Gothic", 76f);
-            label.ForeColor = Theme.Ink;
-            label.TextAlign = ContentAlignment.MiddleCenter;
+            KanaGlyph label = new KanaGlyph(x.K, 76f) { Height = 165, BackColor = Theme.Paper };
             Add(label);
             TableLayoutPanel tableLayoutPanel = new TableLayoutPanel();
             tableLayoutPanel.ColumnCount = 2;
@@ -834,6 +871,8 @@ namespace KanaSmallSteps
             Add(Theme.Label("这是原生 Windows 桌面程序，不调用浏览器或 WebView，也无需联网。104 个发音片段内置在程序中，无需额外安装日语语音包。进度自动保存在本机；关闭再打开可继续学习。网页版本的浏览器进度不会自动迁移。", 11f, false, 115));
             Add(Theme.Label("录音来源与授权", 17f, true, 44));
             Add(Theme.Label("录音：FUN Japanese Learning（https://funjapaneselearning.com）。\n数据集整理：Arsalan Anwari，Kana Sounds。\nhttps://huggingface.co/datasets/arsalan-anwari/kana-sounds\n授权：Creative Commons Attribution 4.0（CC BY 4.0）。\nhttps://creativecommons.org/licenses/by/4.0/\n录音按原样内置；调整了文件标识以匹配本程序的罗马音显示。", 10f, false, 153));
+            Add(Theme.Label("笔顺与字体", 17f, true, 44));
+            Add(Theme.Label("笔顺数据：KanjiVG（https://kanjivg.tagaini.net），Copyright (C) 2009/2010/2011 Ulrich Apel，\n授权：Creative Commons Attribution-ShareAlike 3.0（CC BY-SA 3.0），https://creativecommons.org/licenses/by-sa/3.0/。\n假名字体：Klee One，Copyright 2020 The Klee Project Authors，授权：SIL Open Font License 1.1；\n本程序只内置了其中的假名部分。", 10f, false, 110));
             Add(Theme.Label("今日计划与专注计时", 17f, true, 44));
             Add(Theme.Label("「今日计划」会按你的进度给出当天建议：有错题先复习，再学下一行，做一轮测验，并完成每日专注时长目标。错题达到 8 个时，会建议当天先不学新内容。\n侧边栏的计时器在切换页面时不会停止；只有计时器走过的时间会计入学习时长。时间到会响铃并提醒休息。连续学习天数按每天是否有学习记录计算。", 11f, false, 120));
             Add(Theme.Label("外观与护眼", 17f, true, 44));
@@ -882,10 +921,7 @@ namespace KanaSmallSteps
                 Label label = Theme.Label(Data.Groups.First((KanaGroup g) => g.Id == x.Group).Name, 11f, false, 32);
                 label.TextAlign = ContentAlignment.MiddleCenter;
                 tableLayoutPanel2.Controls.Add(label, 0, 0);
-                Label label2 = Theme.Label(x.K, 72f, false, 135);
-                label2.Font = new Font("Yu Gothic", 72f);
-                label2.TextAlign = ContentAlignment.MiddleCenter;
-                label2.ForeColor = Theme.Ink;
+                KanaGlyph label2 = new KanaGlyph(x.K, 72f) { Dock = DockStyle.Fill, BackColor = Theme.Paper };
                 tableLayoutPanel2.Controls.Add(label2, 0, 1);
                 Label label3 = Theme.Label(x.R, 26f, true, 55);
                 label3.TextAlign = ContentAlignment.MiddleCenter;

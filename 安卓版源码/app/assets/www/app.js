@@ -129,6 +129,7 @@
   }
 
   function render() {
+    if (Strokes) Strokes.stop();
     var tabs = document.querySelectorAll('#tabbar button');
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.page === page);
     if (page === 'today') renderToday();
@@ -334,7 +335,7 @@
     }).join('') + '</optgroup></select>';
   }
 
-  function resetDeck() { deck = C.shuffle(C.pool(scope, progress)); cardIndex = 0; flipped = false; }
+  function resetDeck() { deck = C.shuffle(C.pool(scope, progress)); cardIndex = 0; flipped = false; lastStrokeKana = null; }
   function startCards(s) { scope = s; resetDeck(); page = 'cards'; render(); window.scrollTo(0, 0); }
   function startQuiz(s) { scope = s; quiz = new C.Quiz(s, progress); page = 'quiz'; render(); window.scrollTo(0, 0); }
   function moveCard(n) { if (!deck.length) return; cardIndex = (cardIndex + n + deck.length) % deck.length; flipped = false; render(); }
@@ -354,9 +355,121 @@
       '<div class="answer">' + (flipped ? x.R : '· · ·') + '</div><div class="hint">' + (flipped ? '再点一次可隐藏答案' : '点击卡片，核对读音') + '</div></button>' +
       '<div class="btns even"><button class="btn outline" data-act="listen-card">听发音</button><button class="btn outline" data-act="prev">上一张</button><button class="btn outline" data-act="next">下一张</button></div>';
     if (flipped) html += '<div class="btns even"><button class="btn" data-act="again">还不熟，再练练</button><button class="btn primary" data-act="know">我记住了 ✓</button></div>';
+    if (Strokes.has(x.K)) {
+      html += '<section class="card strokes" aria-label="笔顺"><header><h2>笔顺</h2><span>共 ' + Strokes.get(x.K).length + ' 画</span>' +
+        '<button class="btn replay" data-act="stroke-replay">▶ 重播</button></header><button class="stroke-board" id="stroke-board" data-act="stroke-replay" aria-label="' + x.K + ' 的笔顺，点击重播"></button>' +
+        '<div class="stroke-steps" id="stroke-steps"></div><p class="legend"><b></b>紫色是当前这一笔，圆点是起笔处，数字是第几画。点小格可以单独看某一笔。</p></section>';
+    }
     html += '<button class="btn block" data-act="quiz-scope">用测验检查这一组 →</button>';
     view.innerHTML = html;
+    if (Strokes.has(x.K)) {
+      // 换到新卡片才自动书写；翻开答案时直接显示写完的样子
+      Strokes.mount(x.K, x.K !== lastStrokeKana);
+      lastStrokeKana = x.K;
+    }
   }
+
+  // ---------- 笔顺（2.3.0，数据来自 KanjiVG，CC BY-SA 3.0；与桌面版 StrokeData / StrokePanel 一致） ----------
+  var lastStrokeKana = null;
+  var Strokes = (function () {
+    var NS = 'http://www.w3.org/2000/svg', W = 109, CW = 150, SMALL = { tx: 81, ty: 27, k: 0.72 };
+    var data = window.KANA_STROKES || {}, timers = [];
+    function has(k) { return !!k && k.split('').every(function (c) { return !!data[c]; }); }
+    function get(k) {
+      var out = [];
+      k.split('').forEach(function (c, n) {
+        (data[c] || []).forEach(function (d) { out.push({ d: d, tx: n ? SMALL.tx : 0, ty: n ? SMALL.ty : 0, k: n ? SMALL.k : 1 }); });
+      });
+      return out;
+    }
+    function vb(k) { return '0 0 ' + (k.length > 1 ? CW : W) + ' ' + W; }
+    function el(tag, attrs, parent) {
+      var e = document.createElementNS(NS, tag);
+      Object.keys(attrs).forEach(function (a) { e.setAttribute(a, attrs[a]); });
+      if (parent) parent.appendChild(e);
+      return e;
+    }
+    function tf(s) { return 'translate(' + s.tx + ' ' + s.ty + ') scale(' + s.k + ')'; }
+    function number(svg, p, s, i, current) {
+      var a0 = p.getPointAtLength(0), b0 = p.getPointAtLength(Math.min(6, p.getTotalLength()));
+      var a = { x: a0.x * s.k + s.tx, y: a0.y * s.k + s.ty }, b = { x: b0.x * s.k + s.tx, y: b0.y * s.k + s.ty };
+      var len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      if (current) el('circle', { cx: a.x, cy: a.y, r: 2.6, 'class': 'sg-start' }, svg);
+      var t = el('text', { x: a.x - (b.x - a.x) / len * 7, y: a.y - (b.y - a.y) / len * 7 + 2.5, 'text-anchor': 'middle', 'class': current ? 'sg-num' : 'sg-num old' }, svg);
+      t.textContent = i + 1;
+    }
+    function board(k) {
+      var box = document.getElementById('stroke-board');
+      box.innerHTML = '';
+      var svg = el('svg', { viewBox: vb(k), 'aria-hidden': 'true' }, box), w = k.length > 1 ? CW : W;
+      el('line', { x1: w / 2, y1: 2, x2: w / 2, y2: W - 2, 'class': 'sg-guide' }, svg);
+      el('line', { x1: 2, y1: W / 2, x2: w - 2, y2: W / 2, 'class': 'sg-guide' }, svg);
+      return svg;
+    }
+    function drawUpTo(svg, list, upto, numbers) {
+      list.forEach(function (s, i) {
+        var p = el('path', { d: s.d, transform: tf(s), 'class': i < upto ? 'sg-done' : i === upto ? 'sg-now' : 'sg-ghost' }, svg);
+        if (numbers && i <= upto) number(svg, p, s, i, i === upto);
+      });
+    }
+    function mark(i) {
+      var steps = document.querySelectorAll('.stroke-step');
+      for (var n = 0; n < steps.length; n++) steps[n].setAttribute('aria-current', String(n === i));
+    }
+    function stop() { timers.forEach(clearTimeout); timers = []; }
+    function finished(k) {
+      stop();
+      var list = get(k), svg = board(k);
+      var paths = list.map(function (s) { return el('path', { d: s.d, transform: tf(s), 'class': 'sg-done' }, svg); });
+      list.forEach(function (s, i) { number(svg, paths[i], s, i, false); });
+      mark(-1);
+    }
+    function play(k) {
+      stop();
+      if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { finished(k); return; }
+      var list = get(k), svg = board(k), t = 300;
+      var paths = list.map(function (s) { return el('path', { d: s.d, transform: tf(s), 'class': 'sg-ghost' }, svg); });
+      paths.forEach(function (p, i) {
+        var L = p.getTotalLength(), dur = Math.max(380, Math.min(1100, L * 9));
+        timers.push(setTimeout(function () {
+          if (!document.body.contains(p)) return;
+          mark(i);
+          if (i > 0) paths[i - 1].setAttribute('class', 'sg-done');
+          var olds = svg.querySelectorAll('.sg-start');
+          for (var n = 0; n < olds.length; n++) olds[n].remove();
+          var nums = svg.querySelectorAll('.sg-num');
+          for (var m = 0; m < nums.length; m++) nums[m].setAttribute('class', 'sg-num old');
+          number(svg, p, list[i], i, true);
+          p.setAttribute('class', 'sg-now');
+          p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+          p.getBoundingClientRect();
+          p.style.transition = 'stroke-dashoffset ' + dur + 'ms ease-in-out';
+          p.style.strokeDashoffset = 0;
+        }, t));
+        t += dur + 260;
+      });
+      timers.push(setTimeout(function () { if (document.body.contains(svg)) finished(k); }, t));
+    }
+    function pin(k, i) {
+      stop();
+      var svg = board(k);
+      drawUpTo(svg, get(k), i, true);
+      mark(i);
+    }
+    function mount(k, autoplay) {
+      var box = document.getElementById('stroke-steps'), list = get(k);
+      box.innerHTML = '';
+      list.forEach(function (_, i) {
+        var b = document.createElement('button');
+        b.className = 'stroke-step'; b.setAttribute('data-step', i); b.setAttribute('aria-label', '第 ' + (i + 1) + ' 画');
+        drawUpTo(el('svg', { viewBox: vb(k), 'aria-hidden': 'true' }, b), list, i, false);
+        var tag = document.createElement('i'); tag.textContent = i + 1; b.appendChild(tag);
+        box.appendChild(b);
+      });
+      if (autoplay) play(k); else finished(k);
+    }
+    return { has: has, get: get, mount: mount, play: play, pin: pin, stop: stop };
+  })();
 
   // ---------- 辨认测验 ----------
   function renderQuiz() {
@@ -418,7 +531,9 @@
       '<div class="card"><h2 style="margin-top:0">使用与进度</h2><p>104 个发音片段内置在应用中，无需联网。进度自动保存在本机，卸载应用会删除进度。手机版与电脑版的进度各自独立。</p>' +
       '<p class="small">版本 ' + C.VERSION + (call('dataPath') ? ' · 进度文件：' + call('dataPath') : '') + '</p></div>' +
       '<div class="card"><h2 style="margin-top:0">录音来源与授权</h2><p class="small">录音：FUN Japanese Learning（https://funjapaneselearning.com）。<br>数据集整理：Arsalan Anwari，Kana Sounds。<br>https://huggingface.co/datasets/arsalan-anwari/kana-sounds<br>' +
-      '授权：Creative Commons Attribution 4.0（CC BY 4.0）。<br>https://creativecommons.org/licenses/by/4.0/<br>录音按原样内置；调整了文件标识以匹配本应用的罗马音显示。</p></div></div>';
+      '授权：Creative Commons Attribution 4.0（CC BY 4.0）。<br>https://creativecommons.org/licenses/by/4.0/<br>录音按原样内置；调整了文件标识以匹配本应用的罗马音显示。</p></div>' +
+      '<div class="card"><h2 style="margin-top:0">笔顺与字体</h2><p class="small">笔顺数据：KanjiVG（https://kanjivg.tagaini.net），Copyright (C) 2009/2010/2011 Ulrich Apel。<br>授权：Creative Commons Attribution-ShareAlike 3.0（CC BY-SA 3.0）。<br>https://creativecommons.org/licenses/by-sa/3.0/<br>' +
+      '假名字体：Klee One，Copyright 2020 The Klee Project Authors。<br>授权：SIL Open Font License 1.1（https://openfontlicense.org）；本应用只内置了其中的假名部分。</p></div></div>';
   }
 
   // ---------- 假名详情（底部面板） ----------
@@ -451,6 +566,7 @@
     if (d.task !== undefined) { runTask(window.__tasks[Number(d.task)]); return; }
     if (d.preset) { setPreset(Number(d.preset)); return; }
     if (d.themeMode) { setTheme(d.themeMode); return; }
+    if (d.step !== undefined && deck[cardIndex]) { Strokes.pin(deck[cardIndex].K, Number(d.step)); return; }
     if (d.cat) { category = d.cat; render(); return; }
     if (d.mode) { tableMode = d.mode; render(); return; }
     if (d.kana) { showKana(d.kana); return; }
@@ -488,6 +604,7 @@
         break;
       case 'close-sheet': closeSheet(); break;
       case 'theme': openThemeSheet(); break;
+      case 'stroke-replay': if (x) Strokes.play(x.K); break;
     }
   });
 

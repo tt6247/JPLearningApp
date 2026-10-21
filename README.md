@@ -2,13 +2,14 @@
 
 面向中文母语、零基础的平假名学习应用，目标是能读懂漫画和轻小说。有 **Windows 桌面版**和**安卓版**两个版本，功能和学习规则保持同步，都能完全离线使用。
 
-当前版本：**2.2.0**。下载安装包请到 [Releases](../../releases)。
+当前版本：**2.3.0**。下载安装包请到 [Releases](../../releases)。
 
 ## 功能
 
 - **今日计划**：根据学习进度给出当天建议。有错题先复习，再学下一行，然后做一轮测验，最后完成每日专注时长。
 - **五十音表 / 分组学习**：包括清音 46 个、浊音和半浊音 25 个、拗音 33 个。点开任意假名可以查看读音、听发音。
-- **记忆卡**：先回想，再翻开答案核对。
+- **记忆卡**：先回想，再翻开答案核对。卡片旁的**笔顺面板**会自动逐笔书写，并标出起笔处和第几画；也可以逐笔分解查看。
+- **教科书体字形**：假名使用课本楷书风格的 Klee One 字体，笔画的起笔、收笔和方向都看得清楚。
 - **辨认测验**：四选一，每轮最多 10 题。答错的假名自动进入错题本，连续答对两次才会移出。
 - **专注计时**：可选 5、10、15、25 分钟，可设每日目标，有近 7 天柱状图。时间到会提醒休息。
 - **护眼外观**：可选亮色护眼、深色护眼，或跟随系统。两套配色都用暖色调，不用纯白和纯黑。
@@ -49,8 +50,13 @@ sudo apt-get install openjdk-21-jdk-headless nodejs android-sdk-platform-23 aapt
 
 录音按原样内置，只调整了文件名，以匹配本应用的罗马音显示。
 
+## 笔顺与字体
+
+- 笔顺数据：[KanjiVG](https://kanjivg.tagaini.net)，Copyright (C) 2009/2010/2011 Ulrich Apel，按 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) 授权。
+- 假名字体：[Klee One](https://github.com/fontworks-fonts/Klee)，Copyright 2020 The Klee Project Authors，按 [SIL Open Font License 1.1](https://openfontlicense.org) 授权。这里只内置了假名子集。
+
 ## 许可证
 
 本项目源代码采用 [MIT 许可证](LICENSE)，可以自由使用、修改和再发布，但需保留版权声明。
 
-发音录音不在 MIT 许可范围内，按上面的 CC BY 4.0 授权使用，详见 [NOTICE](NOTICE)。
+发音录音、笔顺数据和字体都不在 MIT 许可范围内，分别按 CC BY 4.0、CC BY-SA 3.0 和 SIL OFL 1.1 授权，详见 [NOTICE](NOTICE)。

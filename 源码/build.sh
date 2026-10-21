@@ -13,6 +13,8 @@ RSP="$(mktemp)"
   echo "-win32manifest:src/app.manifest"
   for r in mscorlib System System.Core System.Drawing System.Windows.Forms System.Xml System.Xml.Linq; do echo "-r:$REF/$r.dll"; done
   for f in src/Resources/KanaAudio/*; do echo "-resource:$f,$(basename "$f")"; done
+  for f in src/Resources/Fonts/*; do echo "-resource:$f,Fonts.$(basename "$f")"; done
+  for f in src/Resources/Strokes/*; do echo "-resource:$f,Strokes.$(basename "$f")"; done
   find src -name '*.cs' | sort
   echo "-out:$OUT"
 } > "$RSP"

@@ -138,5 +138,19 @@ section('all 104 recordings bundled and mapped', function () {
   });
 });
 
+section('stroke data for all 104 kana; textbook stroke counts (2.3.0)', function () {
+  var vm = require('vm'), ctx = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'assets', 'www', 'data', 'kana-strokes.js'), 'utf8'), ctx);
+  var S = ctx.window.KANA_STROKES;
+  function count(k) { return k.split('').reduce(function (n, c) { return n + (S[c] ? S[c].length : NaN); }, 0); }
+  C.All.forEach(function (k) {
+    k.K.split('').forEach(function (c) { check(S[c] && S[c].length > 0 && S[c].every(function (d) { return /^M[-\d.,c\s]+$/.test(d); }), 'strokes ' + c); });
+  });
+  var expected = { 'あ': 3, 'い': 2, 'き': 4, 'さ': 3, 'ふ': 4, 'を': 3, 'ん': 1, 'ぱ': 4, 'きゃ': 7, 'びょ': 5 };
+  Object.keys(expected).forEach(function (k) { check(count(k) === expected[k], 'stroke count ' + k); });
+  var font = path.join(__dirname, '..', 'app', 'assets', 'www', 'fonts', 'KleeOne-SemiBold-kana.ttf');
+  check(fs.existsSync(font) && fs.statSync(font).size > 30000, 'kana font bundled');
+});
+
 console.log(results.join('\n'));
 console.log('全部 ' + results.length + ' 组通过');

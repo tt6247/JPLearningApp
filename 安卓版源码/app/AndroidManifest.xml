@@ -2,8 +2,8 @@
 <!-- 版本号与桌面版同步：versionName = 桌面版 ProductVersion，versionCode = 主*10000 + 次*100 + 修订 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.kanasmallsteps.app"
-    android:versionCode="20200"
-    android:versionName="2.2.0">
+    android:versionCode="20300"
+    android:versionName="2.3.0">
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
 

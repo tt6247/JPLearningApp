@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Drawing;
+using System.Drawing.Text;
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -169,6 +172,102 @@ namespace KanaSmallSteps
             return new Font("Microsoft YaHei UI", size, bold ? FontStyle.Bold : FontStyle.Regular);
         }
 
+        // ---------- 假名字体：Klee One（教科书体，SIL OFL 1.1），内嵌资源 Fonts.KleeOne-SemiBold-kana.ttf ----------
+        // 只保留了假名和日文标点（约 70 KB）。先写到本机缓存文件夹再按文件加载（Windows 和 Mono 都可靠），
+        // 失败时改用内存加载，再失败退回 Yu Gothic。假名一律用 GDI+（Graphics.DrawString）绘制。
+
+        private const string KanaFontResource = "Fonts.KleeOne-SemiBold-kana.ttf";
+
+        private static PrivateFontCollection KanaFonts;
+
+        private static FontFamily KanaFamily;
+
+        private static IntPtr KanaFontMemory = IntPtr.Zero;
+
+        public static bool KanaFontLoaded
+        {
+            get { EnsureKanaFont(); return KanaFamily != null; }
+        }
+
+        private static byte[] ReadResource(string name)
+        {
+            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
+            {
+                if (s == null)
+                {
+                    return null;
+                }
+                using (MemoryStream m = new MemoryStream())
+                {
+                    s.CopyTo(m);
+                    return m.ToArray();
+                }
+            }
+        }
+
+        private static void EnsureKanaFont()
+        {
+            if (KanaFonts != null)
+            {
+                return;
+            }
+            KanaFonts = new PrivateFontCollection();
+            byte[] data = null;
+            try
+            {
+                data = ReadResource(KanaFontResource);
+            }
+            catch
+            {
+            }
+            if (data == null)
+            {
+                return;
+            }
+            try
+            {
+                string dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KanaSmallStepsDesktop", "fonts");
+                Directory.CreateDirectory(dir);
+                string file = System.IO.Path.Combine(dir, "KleeOne-SemiBold-kana-" + data.Length + ".ttf");
+                if (!File.Exists(file) || new FileInfo(file).Length != data.Length)
+                {
+                    File.WriteAllBytes(file, data);
+                }
+                KanaFonts.AddFontFile(file);
+            }
+            catch
+            {
+                try
+                {
+                    // 缓存文件夹不可写时改用内存加载（内存需在程序运行期间一直有效，故不释放）
+                    KanaFontMemory = Marshal.AllocCoTaskMem(data.Length);
+                    Marshal.Copy(data, 0, KanaFontMemory, data.Length);
+                    KanaFonts.AddMemoryFont(KanaFontMemory, data.Length);
+                }
+                catch
+                {
+                }
+            }
+            if (KanaFonts.Families.Length > 0)
+            {
+                KanaFamily = KanaFonts.Families[0];
+            }
+        }
+
+        /// <summary>假名大字用的字体（磅）。</summary>
+        public static Font KanaFont(float size)
+        {
+            EnsureKanaFont();
+            return KanaFamily != null ? new Font(KanaFamily, size, FontStyle.Regular) : new Font("Yu Gothic", size);
+        }
+
+        /// <summary>假名字体（像素，用于自绘控件）。</summary>
+        public static Font KanaFontPx(float pixels)
+        {
+            EnsureKanaFont();
+            return KanaFamily != null ? new Font(KanaFamily, pixels, FontStyle.Regular, GraphicsUnit.Pixel) : new Font("Yu Gothic", pixels, FontStyle.Regular, GraphicsUnit.Pixel);
+        }
+
         public static Button Button(string text, Action action, bool primary)
         {
             Button button = new Button();
@@ -251,9 +350,13 @@ namespace KanaSmallSteps
             }
             int top = (int)(r.Height * 0.72f);
             int bottom = r.Height - top;
-            using (Font font = new Font("Yu Gothic", Math.Max(12f, r.Height * 0.45f), FontStyle.Regular, GraphicsUnit.Pixel))
+            using (Font font = Theme.KanaFontPx(Math.Max(12f, r.Height * 0.42f)))
+            using (SolidBrush ink = new SolidBrush(Theme.Ink))
+            using (StringFormat fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             {
-                TextRenderer.DrawText(e.Graphics, Item.K, font, new Rectangle(0, 0, r.Width, top), Theme.Ink, fill, TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
+                // 假名用 GDI+ 绘制，直接使用内嵌字体
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                e.Graphics.DrawString(Item.K, font, ink, new RectangleF(0, 2, r.Width, top), fmt);
             }
             using (Font font2 = new Font("Segoe UI", Math.Max(9f, r.Height * 0.17f), FontStyle.Regular, GraphicsUnit.Pixel))
             {

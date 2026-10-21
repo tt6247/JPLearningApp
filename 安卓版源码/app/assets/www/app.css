@@ -25,7 +25,9 @@
 html, body { margin: 0; background: var(--bg); color: var(--ink); }
 body { font: 15px/1.65 system-ui, -apple-system, "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; overscroll-behavior-y: none; }
 body.theming, body.theming * { transition: background-color .25s, border-color .25s, color .25s !important; }
-[lang="ja"], .kana { font-family: "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic", sans-serif; }
+/* 假名字体：Klee One（教科书体，SIL OFL 1.1），只含假名和日文标点；其余文字自动退回系统字体 */
+@font-face { font-family: "KanaKlee"; src: url("fonts/KleeOne-SemiBold-kana.ttf") format("truetype"); font-weight: 400 700; font-display: block; }
+[lang="ja"], .kana { font-family: "KanaKlee", "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic", sans-serif; }
 button, select { font: inherit; color: inherit; }
 button { border: 0; background: none; cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
@@ -174,6 +176,27 @@ select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-ra
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 .sheet .big { font-size: 100px; }
 .toast { position: fixed; left: 50%; bottom: calc(var(--tab) + 16px); transform: translateX(-50%); z-index: 12; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 14px; font-size: 13.5px; max-width: calc(100vw - 32px); text-align: center; }
+
+/* 笔顺面板（2.3.0）：与桌面版 StrokePanel 一致 */
+.strokes { display: grid; gap: 10px; }
+.strokes header { display: flex; align-items: baseline; gap: 8px; }
+.strokes header span { color: var(--muted); font-size: 13px; margin-right: auto; }
+.strokes .replay { min-height: 32px; padding: 0 12px; font-size: 13px; }
+.stroke-board { width: 100%; max-width: 300px; aspect-ratio: 1; justify-self: center; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; padding: 0; }
+.stroke-board svg, .stroke-step svg { width: 100%; height: 100%; display: block; }
+.stroke-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.stroke-step { aspect-ratio: 1; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; position: relative; padding: 0; }
+.stroke-step[aria-current="true"] { border-color: var(--accent); }
+.stroke-step i { position: absolute; left: 4px; top: 1px; font-style: normal; font-size: 10px; color: var(--muted); }
+.strokes .legend { color: var(--muted); font-size: 12px; margin: 0; }
+.strokes .legend b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 4px; vertical-align: middle; }
+.sg-guide { stroke: var(--surface2); stroke-width: .6; stroke-dasharray: 2 2; fill: none; }
+.sg-ghost { stroke: var(--line); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.sg-done { stroke: var(--ink); stroke-width: 3.2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.sg-now { stroke: var(--accent); stroke-width: 3.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.sg-start { fill: var(--accent); }
+.sg-num { fill: var(--accent); font: 700 7px system-ui, sans-serif; }
+.sg-num.old { fill: var(--muted); font-weight: 400; }
 
 @media (max-width: 360px) {
   .stat strong { font-size: 17px; }

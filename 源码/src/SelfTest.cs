@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -141,6 +142,88 @@ namespace KanaSmallSteps
             return "PASS: row completion via quiz; fixed daily row; review gating; detail toggle; next-day advance.";
         }
 
+                /// <summary>2.3.0：笔顺数据完整、笔画数与课本一致、路径解析正确；假名字体可加载。</summary>
+        private static string StrokeTests()
+        {
+            foreach (Kana k in Data.All)
+            {
+                Check(StrokeData.Has(k.K), "stroke data " + k.K);
+                foreach (Stroke s in StrokeData.Get(k.K))
+                {
+                    Check(s.Points.Length >= 2 && s.Length > 3, "stroke path " + k.K);
+                    foreach (PointF p in s.Points)
+                    {
+                        Check(p.X > -10 && p.X < StrokeData.Width(k.K) + 10 && p.Y > -10 && p.Y < 120, "stroke bounds " + k.K);
+                    }
+                }
+            }
+            string[] expected = new string[] { "あ3", "い2", "き4", "さ3", "ふ4", "を3", "ん1", "ぱ4", "きゃ7", "びょ5" };
+            foreach (string e in expected)
+            {
+                string kana = e.Substring(0, e.Length - 1);
+                Check(StrokeData.Get(kana).Count == e[e.Length - 1] - '0', "stroke count " + kana);
+            }
+            Stroke first = StrokeData.Get("あ")[0];
+            Check(Math.Abs(first.Points[0].X - 31.01f) < 0.01f && Math.Abs(first.Points[0].Y - 33f) < 0.01f, "path start");
+            Check(first.Partial(0.5f).Length < first.Points.Length && first.Partial(1).Length == first.Points.Length, "partial stroke");
+            PointF small = StrokeData.Get("きゃ")[4].Points[0];
+            Check(small.X > 90 && small.Y > 27, "small kana offset");
+            Check(Theme.KanaFontLoaded, "kana font");
+            using (Font f = Theme.KanaFont(20f))
+            {
+                Check(f.Name.StartsWith("Klee One"), "kana font family " + f.Name);
+            }
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+            {
+                // 仅在 Windows 上检查字形确实画出来了，且与 Yu Gothic 不同（Mono 不能渲染程序内加载的字体）
+                using (Font klee = Theme.KanaFont(72f))
+                using (Font gothic = new Font("Yu Gothic", 72f))
+                {
+                    bool[] a = Glyph(klee), b = Glyph(gothic);
+                    int inkA = 0, diff = 0;
+                    for (int i = 0; i < a.Length; i++)
+                    {
+                        if (a[i]) inkA++;
+                        if (a[i] != b[i]) diff++;
+                    }
+                    Check(inkA > 800, "kana font renders (" + inkA + " px)");
+                    Check(diff > 300, "kana font differs from Yu Gothic (" + diff + " px)");
+                }
+            }
+            using (StrokePanel panel = new StrokePanel("きゃ"))
+            using (Bitmap bmp = new Bitmap(panel.Width, panel.Height))
+            {
+                panel.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+                Check(panel.StrokeCount == 7, "stroke panel");
+            }
+            return Environment.OSVersion.Platform == PlatformID.Win32NT
+                ? "PASS: stroke data for all 104 kana; textbook stroke counts; path parsing; partial strokes; combo layout; Klee One font loads and renders; stroke panel renders."
+                : "PASS: stroke data for all 104 kana; textbook stroke counts; path parsing; partial strokes; combo layout; Klee One font loads (glyph rendering check skipped: not Windows); stroke panel renders.";
+        }
+
+                private static bool[] Glyph(Font f)
+        {
+            using (Bitmap bmp = new Bitmap(160, 160))
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.White);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                using (StringFormat fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString("あ", f, Brushes.Black, new RectangleF(0, 0, 160, 160), fmt);
+                }
+                bool[] ink = new bool[160 * 160];
+                for (int y = 0; y < 160; y++)
+                {
+                    for (int x = 0; x < 160; x++)
+                    {
+                        ink[y * 160 + x] = bmp.GetPixel(x, y).R < 128;
+                    }
+                }
+                return ink;
+            }
+        }
+
                 private static string TimerTests()
         {
             DateTime t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -225,6 +308,7 @@ namespace KanaSmallSteps
                 list.Add(DailyTests(folder));
                 list.Add(TimerTests());
                 list.Add(PlanCompletionTests(folder));
+                list.Add(StrokeTests());
                 Check(Data.All.Select(OfflineAudio.Key).Distinct().Count() == 104, "audio mapping");
                 bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
                 using (OfflineAudio offlineAudio = new OfflineAudio(Path.Combine(folder, "audio")))
