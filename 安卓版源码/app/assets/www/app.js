@@ -298,7 +298,7 @@
     if (tableMode === 'table') {
       var cols = category === 'combo' ? 3 : 5;
       var heads = cols === 3 ? ['ya', 'yu', 'yo'] : ['a', 'i', 'u', 'e', 'o'];
-      html += '<div class="card"><div class="kgrid" style="grid-template-columns:38px repeat(' + cols + ',1fr)"><span></span>' +
+      html += '<div class="card chart"><div class="kgrid" style="grid-template-columns:var(--labw) repeat(' + cols + ',minmax(0,1fr))"><span></span>' +
         heads.map(function (h) { return '<span class="head">' + h + '</span>'; }).join('');
       gs.forEach(function (g) {
         html += '<span class="lab">' + g.name + '</span>';

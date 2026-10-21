@@ -22,7 +22,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); color: var(--ink); }
+html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden; }
 body { font: 15px/1.65 system-ui, -apple-system, "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; overscroll-behavior-y: none; }
 body.theming, body.theming * { transition: background-color .25s, border-color .25s, color .25s !important; }
 /* 假名字体：Klee One（教科书体，SIL OFL 1.1），只含假名和日文标点；其余文字自动退回系统字体 */
@@ -121,15 +121,15 @@ select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-ra
 .week .goal-line span { position: absolute; right: 0; top: -17px; font-size: 10.5px; color: var(--muted); }
 
 /* 五十音表 */
-.kgrid { display: grid; gap: 6px; }
+.kgrid { --labw: 38px; display: grid; gap: 6px; }
 .kgrid .lab { font-size: 11px; color: var(--muted); display: grid; place-items: center; text-align: center; line-height: 1.2; }
 .kgrid .head { font-size: 11px; color: var(--muted); text-align: center; }
-.kcell { position: relative; aspect-ratio: 1 / 1.08; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; }
-.kcell .kana { font-size: 26px; line-height: 1.25; }
-.kcell small { font-size: 10.5px; color: var(--muted); }
+.kcell { position: relative; aspect-ratio: 1 / 1.08; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; }
+.kcell .kana { font-size: min(26px, 6.6vw); line-height: 1.25; }
+.kcell small { font-size: min(10.5px, 2.9vw); color: var(--muted); }
 .kcell.learned { background: var(--green-bg); border-color: var(--green-bg); }
 .kcell.learned::after { content: '✓'; position: absolute; top: 2px; right: 6px; font-size: 10px; color: var(--green); }
-.kcell.combo .kana { font-size: 22px; }
+.kcell.combo .kana { font-size: min(22px, 6vw); }
 .empty { display: grid; place-items: center; color: var(--line); }
 .groups { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .group { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
@@ -201,7 +201,13 @@ select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-ra
 @media (max-width: 360px) {
   .stat strong { font-size: 17px; }
   .big { font-size: 80px; }
-  .kcell .kana { font-size: 22px; }
+}
+/* 窄屏或系统字号调大时，五十音表收紧留白，保证五列都放得下 */
+@media (max-width: 400px) {
+  .card.chart { padding: 12px 10px; }
+  .kgrid { --labw: 30px; gap: 4px; }
+  .kgrid .lab { font-size: 10px; }
+  .kcell { border-radius: 10px; }
 }
 @media (min-width: 560px) { .groups { grid-template-columns: 1fr 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
