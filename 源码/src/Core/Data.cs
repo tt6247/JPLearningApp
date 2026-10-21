@@ -118,6 +118,16 @@ namespace KanaSmallSteps
             return Groups.Where((KanaGroup g) => g.Id == scope || g.Type == scope).SelectMany((KanaGroup g) => g.Items).ToList();
         }
 
+        /// <summary>
+        /// 记忆卡的牌组（2.4.0）：默认与五十音表相同的顺序——先按行（あ行、か行……），行内按 a i u e o 列；
+        /// shuffled 为 true 时打乱。
+        /// </summary>
+        public static List<Kana> Deck(string scope, Progress p, bool shuffled)
+        {
+            List<Kana> pool = Pool(scope, p).OrderBy((Kana k) => All.IndexOf(k)).ToList();
+            return shuffled ? Randomize.Shuffle(pool) : pool;
+        }
+
         public static string Note(Kana x)
         {
             if (x.K == "を")

@@ -93,6 +93,12 @@
     return a;
   }
 
+  // 记忆卡牌组（2.4.0）：默认与五十音表相同的顺序（按行，行内按 a i u e o），shuffled 时打乱。
+  function deck(scope, p, shuffled, rng) {
+    var list = pool(scope, p).sort(function (a, b) { return All.indexOf(a) - All.indexOf(b); });
+    return shuffled ? shuffle(list, rng) : list;
+  }
+
   // ---------------- Progress ----------------
   var GOAL_CHOICES = [5, 10, 15, 20, 30, 45, 60];
   var TIMER_CHOICES = [5, 10, 15, 25];
@@ -475,8 +481,8 @@
   };
 
   var api = {
-    VERSION: '2.3.1', THEMES: THEMES,
-    Groups: Groups, All: All, ByKana: ByKana, groupById: groupById, pool: pool, note: note, audioKey: audioKey, shuffle: shuffle,
+    VERSION: '2.4.0', THEMES: THEMES,
+    Groups: Groups, All: All, ByKana: ByKana, groupById: groupById, pool: pool, deck: deck, note: note, audioKey: audioKey, shuffle: shuffle,
     GOAL_CHOICES: GOAL_CHOICES, TIMER_CHOICES: TIMER_CHOICES, dayKey: dayKey, addDays: addDays,
     Progress: Progress, Quiz: Quiz, StudyTimer: StudyTimer, DailyPlan: DailyPlan
   };

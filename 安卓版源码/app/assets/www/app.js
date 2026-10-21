@@ -71,7 +71,7 @@
 
   // ---------- 状态 ----------
   var page = 'today', category = 'basic', tableMode = 'table', scope = 'basic';
-  var deck = [], cardIndex = 0, flipped = false, quiz = null, sheetKana = null;
+  var deck = [], deckShuffled = false, cardIndex = 0, flipped = false, quiz = null, sheetKana = null;
   var view = document.getElementById('view');
   function $(id) { return document.getElementById(id); }
 
@@ -335,7 +335,7 @@
     }).join('') + '</optgroup></select>';
   }
 
-  function resetDeck() { deck = C.shuffle(C.pool(scope, progress)); cardIndex = 0; flipped = false; lastStrokeKana = null; }
+  function resetDeck() { deck = C.deck(scope, progress, deckShuffled); cardIndex = 0; flipped = false; lastStrokeKana = null; }
   function startCards(s) { scope = s; resetDeck(); page = 'cards'; render(); window.scrollTo(0, 0); }
   function startQuiz(s) { scope = s; quiz = new C.Quiz(s, progress); page = 'quiz'; render(); window.scrollTo(0, 0); }
   function moveCard(n) { if (!deck.length) return; cardIndex = (cardIndex + n + deck.length) % deck.length; flipped = false; render(); }
@@ -343,13 +343,13 @@
   // ---------- 记忆卡 ----------
   function renderCards() {
     var html = heading('先回想，再翻开答案。', '看着假名试着读出来。点卡片核对答案，再决定是否熟悉。');
-    html += '<div class="row" style="margin-bottom:12px">' + scopeSelect() + '<button class="btn" data-act="shuffle">洗牌</button></div>';
+    html += '<div class="row" style="margin-bottom:12px">' + scopeSelect() + '<button class="btn" data-act="shuffle">' + (deckShuffled ? '按五十音顺序' : '打乱顺序') + '</button></div>';
     if (!deck.length) {
       html += '<div class="card empty-state"><strong>' + (scope === 'learned' ? '还没有已熟悉的假名' : '当前范围没有可学习的假名') + '</strong>请切换学习范围。</div>';
       view.innerHTML = html; return;
     }
     var x = deck[cardIndex];
-    html += '<div class="row hint"><span>记忆卡</span><span>' + (cardIndex + 1) + ' / ' + deck.length + '</span></div>' +
+    html += '<div class="row hint"><span>记忆卡 · ' + (deckShuffled ? '已打乱' : '五十音顺序') + '</span><span>' + (cardIndex + 1) + ' / ' + deck.length + '</span></div>' +
       '<div class="bar" style="margin:6px 0 14px"><i style="width:' + ((cardIndex + 1) / deck.length * 100) + '%"></i></div>' +
       '<button class="flash" data-act="flip" aria-label="' + (flipped ? '隐藏答案' : '翻开答案') + '"><div class="big" lang="ja">' + x.K + '</div>' +
       '<div class="answer">' + (flipped ? x.R : '· · ·') + '</div><div class="hint">' + (flipped ? '再点一次可隐藏答案' : '点击卡片，核对读音') + '</div></button>' +
@@ -584,7 +584,7 @@
       case 'timer-add': addFive(); break;
       case 'timer-reset': resetTimer(); break;
       case 'learn-category': startCards(category); break;
-      case 'shuffle': resetDeck(); render(); break;
+      case 'shuffle': deckShuffled = !deckShuffled; resetDeck(); render(); break;
       case 'flip': flipped = !flipped; render(); break;
       case 'prev': moveCard(-1); break;
       case 'next': moveCard(1); break;

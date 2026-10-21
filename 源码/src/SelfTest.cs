@@ -261,7 +261,10 @@ namespace KanaSmallSteps
                 Check(Data.All.Count == 104 && Data.ByKana.Count == 104, "unique kana");
                 Check(Data.Pool("basic", progress).Count == 46 && Data.Pool("voiced", progress).Count == 25 && Data.Pool("combo", progress).Count == 33, "groups");
                 Check(Data.ByKana["を"].Column == 4 && Data.ByKana["や"].Column == 0 && Data.ByKana["ゆ"].Column == 2 && Data.ByKana["よ"].Column == 4, "chart spacing");
-                list.Add("PASS: 104 kana; 46/25/33 group counts; sparse chart positions.");
+                Check(string.Join("", Data.Deck("basic", progress, false).Take(12).Select((Kana x) => x.K)) == "あいうえおかきくけこさし", "card deck follows chart order");
+                Check(string.Join("", Data.Deck("y", progress, false).Select((Kana x) => x.K)) == "やゆよ" && Data.Deck("all", progress, false).Last().K == "ぴょ", "card deck order for sparse rows and all");
+                Check(Data.Deck("basic", progress, true).Select((Kana x) => x.K).OrderBy((string k) => k).SequenceEqual(Data.Pool("basic", progress).Select((Kana x) => x.K).OrderBy((string k) => k)), "shuffled deck keeps the same cards");
+                list.Add("PASS: 104 kana; 46/25/33 group counts; sparse chart positions; card deck in chart order.");
                 for (int i = 0; i < 300; i++)
                 {
                     Quiz quiz = new Quiz((i % 2 == 0) ? "all" : "nn", progress);

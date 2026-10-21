@@ -7,11 +7,15 @@ function check(ok, name) { if (!ok) throw new Error('FAIL: ' + name); }
 function section(name, fn) { fn(); results.push('PASS: ' + name); }
 function at(y, m, d, h) { return function () { return new Date(y, m - 1, d, h || 9, 0, 0); }; }
 
-section('104 kana; 46/25/33 group counts; sparse chart positions', function () {
+section('104 kana; 46/25/33 group counts; sparse chart positions; card deck in chart order', function () {
   var p = new C.Progress();
   check(C.All.length === 104 && Object.keys(C.ByKana).length === 104, 'unique kana');
   check(C.pool('basic', p).length === 46 && C.pool('voiced', p).length === 25 && C.pool('combo', p).length === 33, 'groups');
   check(C.ByKana['を'].column === 4 && C.ByKana['や'].column === 0 && C.ByKana['ゆ'].column === 2 && C.ByKana['よ'].column === 4, 'chart spacing');
+  check(C.deck('basic', p, false).slice(0, 12).map(function (x) { return x.K; }).join('') === 'あいうえおかきくけこさし', 'card deck follows chart order');
+  check(C.deck('y', p, false).map(function (x) { return x.K; }).join('') === 'やゆよ' && C.deck('all', p, false).pop().K === 'ぴょ', 'card deck order for sparse rows and all');
+  var sh = C.deck('basic', p, true).map(function (x) { return x.K; }).sort().join(''), pl = C.pool('basic', p).map(function (x) { return x.K; }).sort().join('');
+  check(sh === pl, 'shuffled deck keeps the same cards');
 });
 
 section('300 randomized quizzes; distinct answers; score; repeat-submit protection', function () {

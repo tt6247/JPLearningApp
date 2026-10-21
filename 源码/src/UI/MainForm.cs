@@ -43,6 +43,9 @@ namespace KanaSmallSteps
 
         private bool Flipped;
 
+        /// <summary>记忆卡是否打乱顺序；默认按五十音表顺序。</summary>
+        private bool DeckShuffled;
+
         private Quiz Test;
 
         private readonly OfflineAudio Audio;
@@ -550,7 +553,7 @@ namespace KanaSmallSteps
             Label label = Theme.Label("学习范围", 10f, false, 34);
             label.Width = 76;
             label.Dock = DockStyle.None;
-            return Actions(label, box, Theme.Button(quiz ? "重新开始" : "重新洗牌", delegate
+            return Actions(label, box, Theme.Button(quiz ? "重新开始" : (DeckShuffled ? "按五十音顺序" : "打乱顺序"), delegate
             {
                 if (quiz)
                 {
@@ -558,6 +561,7 @@ namespace KanaSmallSteps
                 }
                 else
                 {
+                    DeckShuffled = !DeckShuffled;
                     ResetDeck();
                 }
                 Render();
@@ -566,7 +570,7 @@ namespace KanaSmallSteps
 
         private void ResetDeck()
         {
-            Deck = Randomize.Shuffle(Data.Pool(Scope, State));
+            Deck = Data.Deck(Scope, State, DeckShuffled);
             CardIndex = 0;
             Flipped = false;
         }
@@ -608,7 +612,7 @@ namespace KanaSmallSteps
                 return;
             }
             Kana x = Deck[CardIndex];
-            Add(Theme.Label("记忆卡  " + (CardIndex + 1) + " / " + Deck.Count, 10f, false, 30));
+            Add(Theme.Label("记忆卡  " + (CardIndex + 1) + " / " + Deck.Count + (DeckShuffled ? "  ·  已打乱" : "  ·  五十音顺序"), 10f, false, 30));
             bool hasStrokes = StrokeData.Has(x.K);
             StrokePanel strokes = null;
             if (hasStrokes)
