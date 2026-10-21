@@ -16,13 +16,13 @@ $cscArgs = @(
   '/nologo', '/langversion:5', '/target:winexe', '/platform:anycpu', '/optimize+', '/codepage:65001',
   '/win32manifest:src\app.manifest',
   '/r:System.dll', '/r:System.Core.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll',
-  '/r:System.Xml.dll', '/r:System.Xml.Linq.dll'
+  '/r:System.Xml.dll', '/r:System.Xml.Linq.dll',
+  "/out:$out"   # 旧版 csc 要求 /out、/target 写在源文件之前
 )
 Get-ChildItem 'src\Resources\KanaAudio' -File | ForEach-Object { $cscArgs += "/resource:$($_.FullName),$($_.Name)" }
 Get-ChildItem 'src\Resources\Fonts' -File | ForEach-Object { $cscArgs += "/resource:$($_.FullName),Fonts.$($_.Name)" }
 Get-ChildItem 'src\Resources\Strokes' -File | ForEach-Object { $cscArgs += "/resource:$($_.FullName),Strokes.$($_.Name)" }
 Get-ChildItem 'src' -Recurse -Filter '*.cs' | Sort-Object FullName | ForEach-Object { $cscArgs += $_.FullName }
-$cscArgs += "/out:$out"
 
 & $csc @cscArgs
 if ($LASTEXITCODE -ne 0) { throw '编译失败' }
