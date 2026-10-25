@@ -575,6 +575,9 @@
       if (quiz && quiz.answer(d.answer)) {
         vibrate(quiz.selected === quiz.current().R ? 15 : 60);
         save(); render();
+        // 屏幕较矮或字号较大时，「听发音 / 下一题」可能落在底部标签栏后面：答题后把它滚到可见处
+        var nextBtn = view.querySelector('[data-act="next-question"]');
+        if (nextBtn && nextBtn.parentNode.scrollIntoView) nextBtn.parentNode.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
       return;
     }

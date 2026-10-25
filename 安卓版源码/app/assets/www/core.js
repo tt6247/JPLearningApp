@@ -481,7 +481,7 @@
   };
 
   var api = {
-    VERSION: '2.4.0', THEMES: THEMES,
+    VERSION: '2.4.1', THEMES: THEMES,
     Groups: Groups, All: All, ByKana: ByKana, groupById: groupById, pool: pool, deck: deck, note: note, audioKey: audioKey, shuffle: shuffle,
     GOAL_CHOICES: GOAL_CHOICES, TIMER_CHOICES: TIMER_CHOICES, dayKey: dayKey, addDays: addDays,
     Progress: Progress, Quiz: Quiz, StudyTimer: StudyTimer, DailyPlan: DailyPlan

@@ -22,7 +22,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
 body { font: 15px/1.65 system-ui, -apple-system, "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; overscroll-behavior-y: none; }
 body.theming, body.theming * { transition: background-color .25s, border-color .25s, color .25s !important; }
 /* 假名字体：Klee One（教科书体，SIL OFL 1.1），只含假名和日文标点；其余文字自动退回系统字体 */
@@ -50,7 +50,7 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--part); out
 .tabbar i { font-style: normal; font-size: 19px; line-height: 1.2; }
 .tabbar button.active { color: var(--accent); font-weight: 700; }
 .tabbar button.active::before { content: ''; position: absolute; top: 0; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
-main { max-width: 620px; margin: 0 auto; padding: calc(var(--top) + 10px) 16px calc(var(--tab) + 28px); }
+main { overflow-x: clip; max-width: 620px; margin: 0 auto; padding: calc(var(--top) + 10px) 16px calc(var(--tab) + 28px); }
 
 /* 通用 */
 h1 { font-size: 25px; line-height: 1.3; margin: 8px 0 6px; letter-spacing: -.5px; }
@@ -211,3 +211,6 @@ select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-ra
 }
 @media (min-width: 560px) { .groups { grid-template-columns: 1fr 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* 答题后自动滚到「下一题」时，避开底部标签栏 */
+.btns, .feedback { scroll-margin-bottom: calc(var(--tab) + 16px); }
