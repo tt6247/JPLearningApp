@@ -91,6 +91,11 @@ namespace KanaSmallSteps
             {
                 return "第一次来？从元音「あいうえお」开始，今天认识 5 个假名就很棒。";
             }
+            KanaGroup upcoming = NextGroup(p);
+            if (upcoming != null && upcoming.Id == "Ka" && !p.Learned.Contains("ア"))
+            {
+                return "平假名已经全部熟悉！接下来学片假名：读音完全一样，只是换一种写法。";
+            }
             if (today.Seconds / 60 >= p.Goal)
             {
                 return "今日目标已完成！想多学可以继续，也可以把精力留给明天。";
@@ -186,8 +191,8 @@ namespace KanaSmallSteps
                 {
                     tasks.Add(new PlanTask
                     {
-                        Title = "学完新的一行：" + target.Name,
-                        Detail = chars + "  ·  已熟悉 " + known + " / " + known + (next != null ? "。还有余力可以继续学「" + next.Name + "」。" : "。"),
+                        Title = "学完新的一行：" + Data.GroupLabel(target),
+                        Detail = chars + "  ·  已熟悉 " + known + " / " + known + (next != null ? "。还有余力可以继续学「" + Data.GroupLabel(next) + "」。" : "。"),
                         Done = true,
                         DoneButton = next != null ? "学下一行" : "综合测验",
                         Action = next != null ? PlanAction.LearnGroup : PlanAction.AllQuiz,
@@ -198,7 +203,7 @@ namespace KanaSmallSteps
                 {
                     tasks.Add(new PlanTask
                     {
-                        Title = "学习新的一行：" + target.Name,
+                        Title = "学习新的一行：" + Data.GroupLabel(target),
                         Detail = chars + "  ·  已熟悉 " + known + " / " + target.Items.Count + "（翻卡记住或测验答对都算）",
                         Button = known > 0 ? "继续学习" : "开始学习",
                         Action = PlanAction.LearnGroup,
@@ -210,8 +215,8 @@ namespace KanaSmallSteps
             {
                 tasks.Add(new PlanTask
                 {
-                    Title = "全部假名都已标记熟悉",
-                    Detail = "用「全部假名」测验保持手感，下一步可以开始学片假名。",
+                    Title = "平假名和片假名都已熟悉",
+                    Detail = "用「平片混合」测验保持手感，下一步可以开始认读简单的词语。",
                     Button = "综合测验",
                     Action = PlanAction.AllQuiz
                 });
@@ -221,7 +226,7 @@ namespace KanaSmallSteps
                 tasks.Add(new PlanTask
                 {
                     Title = "今天先不学新的一行",
-                    Detail = "错题有 " + errors + " 个，先练熟它们，明天再学「" + next.Name + "」效果更好。",
+                    Detail = "错题有 " + errors + " 个，先练熟它们，明天再学「" + Data.GroupLabel(next) + "」效果更好。",
                     Action = PlanAction.None
                 });
             }
@@ -238,7 +243,7 @@ namespace KanaSmallSteps
             }
             else
             {
-                quizScope = target != null ? target.Id : (next != null ? next.Id : "all");
+                quizScope = target != null ? target.Id : (next != null ? next.Id : "mix");
             }
             tasks.Add(new PlanTask
             {

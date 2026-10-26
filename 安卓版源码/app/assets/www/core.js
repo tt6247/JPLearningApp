@@ -26,20 +26,43 @@
     'by|びゃ びゅ びょ|bya byu byo', 'py|ぴゃ ぴゅ ぴょ|pya pyu pyo'
   ];
 
+  /** 平假名 → 片假名（Unicode 中两者相差 0x60；非平假名字符原样保留）。 */
+  function toKata(s) {
+    var o = '';
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      o += c >= 0x3041 && c <= 0x3096 ? String.fromCharCode(c + 0x60) : s[i];
+    }
+    return o;
+  }
+
+  /*
+   * 2.5.0 起加入片假名：每个平假名组都有一个对应的片假名组，行列、读音完全相同。
+   *   平假名组：id = a / k / … / ky …，type = basic / voiced / combo，script = hira
+   *   片假名组：id = Ka / Kk / … / Kky …，type = kbasic / kvoiced / kcombo，script = kata
+   * 每个假名的 pair 是另一种写法（あ ↔ ア）。熟悉状态与错题按字符各自记录。
+   */
   function buildGroups() {
     var list = [];
     ROWS.forEach(function (row, i) {
       var f = row.split('|'), roma = f[3].split(' ');
-      var g = { id: f[0], name: f[1], type: i < 11 ? 'basic' : 'voiced', items: [] };
+      var g = { id: f[0], name: f[1], type: i < 11 ? 'basic' : 'voiced', script: 'hira', items: [] };
       for (var j = 0; j < f[2].length; j++) {
-        if (f[2][j] !== ' ') g.items.push({ K: f[2][j], R: roma[j], group: g.id, type: g.type, column: j });
+        if (f[2][j] !== ' ') g.items.push({ K: f[2][j], R: roma[j], group: g.id, type: g.type, script: 'hira', pair: toKata(f[2][j]), column: j });
       }
       list.push(g);
     });
     COMBOS.forEach(function (row) {
       var f = row.split('|'), ks = f[1].split(' '), rs = f[2].split(' ');
-      var g = { id: f[0], name: ks[0] + '组', type: 'combo', items: [] };
-      ks.forEach(function (k, l) { g.items.push({ K: k, R: rs[l], group: g.id, type: 'combo', column: l }); });
+      var g = { id: f[0], name: ks[0] + '组', type: 'combo', script: 'hira', items: [] };
+      ks.forEach(function (k, l) { g.items.push({ K: k, R: rs[l], group: g.id, type: 'combo', script: 'hira', pair: toKata(k), column: l }); });
+      list.push(g);
+    });
+    list.slice().forEach(function (h) {
+      var g = { id: 'K' + h.id, name: toKata(h.name), type: 'k' + h.type, script: 'kata', items: [] };
+      h.items.forEach(function (x) {
+        g.items.push({ K: x.pair, R: x.R, group: g.id, type: g.type, script: 'kata', pair: x.K, column: x.column });
+      });
       list.push(g);
     });
     return list;
@@ -51,17 +74,56 @@
   var ByKana = {};
   All.forEach(function (k) { ByKana[k.K] = k; });
   function groupById(id) { for (var i = 0; i < Groups.length; i++) if (Groups[i].id === id) return Groups[i]; return null; }
+  /** 不区分平片的类别：basic / voiced / combo。 */
+  function baseType(x) { return x.type.charAt(0) === 'k' ? x.type.slice(1) : x.type; }
+  /** 用于列表和计划的组名：片假名组加前缀，避免「元音」「拨音」两种写法同名。 */
+  function groupLabel(g) { return (g.script === 'kata' ? '片假名 · ' : '') + g.name; }
+  /** 某类别在某种写法下的范围 id：('basic', 'kata') → 'kbasic'。 */
+  function typeFor(category, script) { return (script === 'kata' ? 'k' : '') + category; }
 
   function pool(scope, p) {
     if (scope === 'errors') return All.filter(function (k) { return p.errors[k.K] > 0; });
     if (scope === 'learned') return All.filter(function (k) { return p.learned.has(k.K); });
-    if (scope === 'all') return All.slice();
+    if (scope === 'all') return All.filter(function (k) { return k.script === 'hira'; });
+    if (scope === 'kall') return All.filter(function (k) { return k.script === 'kata'; });
+    if (scope === 'mix') return All.slice();
     var out = [];
     Groups.forEach(function (g) { if (g.id === scope || g.type === scope) out = out.concat(g.items); });
     return out;
   }
 
+  var KATA_CONFUSE = {
+    'シ': 'シ 和 ツ 形近：シ 的两点在左边上下排，笔势偏横，最后一笔从左下往右上挑；ツ 的两点在上方左右排，笔势偏竖，最后一笔从右上往左下撇。',
+    'ツ': 'ツ 和 シ 形近：ツ 的两点在上方左右排，笔势偏竖，最后一笔从右上往左下撇；シ 的两点在左边上下排，最后一笔从左下往右上挑。',
+    'ソ': 'ソ 和 ン 形近：ソ 的点偏竖，第二笔从右上往左下撇；ン 的点偏横，第二笔从左下往右上挑。',
+    'ン': 'ン 和 ソ 形近：ン 的点偏横，第二笔从左下往右上挑；ソ 的点偏竖，第二笔从右上往左下撇。'
+  };
+  var KATA_LOOKALIKE = { 'カ': 1, 'キ': 1, 'ヘ': 1, 'リ': 1, 'モ': 1, 'ヤ': 1, 'セ': 1 };
+
+  /** 片假名的额外提示（形近字、与平假名相像的字），没有时返回空字符串。 */
+  function kataHint(x) {
+    var k = x.script === 'kata' ? x.K : x.pair;
+    if (KATA_CONFUSE[k]) return KATA_CONFUSE[k];
+    if (KATA_LOOKALIKE[k]) return k + ' 和平假名「' + toHira(k) + '」长得很像，可以对照着记。';
+    return '';
+  }
+  function toHira(s) {
+    var o = '';
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      o += c >= 0x30A1 && c <= 0x30F6 ? String.fromCharCode(c - 0x60) : s[i];
+    }
+    return o;
+  }
+
   function note(x) {
+    if (x.script === 'kata') {
+      if (x.K === 'ヲ') return '通常读 o，现代多只出现在特殊用法中；罗马音写作 wo。';
+      if (x.K === 'ン') return '拨音，占一拍；' + KATA_CONFUSE['ン'];
+      if (x.K === 'ヂ' || x.K === 'ヅ') return 'ヂ通常与ジ同音，ヅ通常与ズ同音，实际很少用到。';
+      if (x.K.length > 1) return '后一个字是小写的ャ、ュ或ョ；两个字合起来占一拍，例如 キャ。';
+      return kataHint(x) || '片假名多用于外来语、拟声词和强调，读音与平假名「' + x.pair + '」相同。';
+    }
     if (x.K === 'を') return '通常读 o；罗马音写作 wo，用于区别「お」。';
     if (x.K === 'は') return '通常读 ha；作为助词时读 wa。';
     if (x.K === 'へ') return '通常读 he；作为助词时读 e。';
@@ -73,6 +135,7 @@
 
   /** 内置录音文件名（与桌面版 OfflineAudio.Key 相同，去掉 KanaAudio. 前缀）。 */
   function audioKey(x) {
+    if (x.script === 'kata') x = ByKana[x.pair]; // 片假名与平假名读音相同，共用录音
     var folder = x.type === 'basic' ? 'seion' : x.type === 'combo' ? 'yoon' : x.group === 'p' ? 'handakuon' : 'dakuon';
     var r = x.R;
     if (x.K === 'ぢ') r = 'di';
@@ -104,6 +167,7 @@
   var TIMER_CHOICES = [5, 10, 15, 25];
   var KEEP_DAYS = 120;
   var THEMES = ['system', 'light', 'dark'];
+  var SCRIPTS = ['hira', 'kata', 'both']; // 五十音表的字形：平假名 / 片假名 / 平片对照（2.5.0）
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function dayKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -122,6 +186,7 @@
     this.days = {};
     this.timerState = null; // 计时器状态（安卓进程可能被系统回收，用于恢复）
     this.theme = 'system';  // 外观：system 跟随系统 / light 亮色护眼 / dark 深色护眼（2.2.0）
+    this.script = 'hira';   // 五十音表显示的字形（2.5.0）
     this.clock = function () { return new Date(); };
   }
 
@@ -136,6 +201,7 @@
     if (GOAL_CHOICES.indexOf(o.goal) >= 0) p.goal = o.goal;
     if (o.timerMinutes >= 1 && o.timerMinutes <= 120) p.timerMinutes = Math.floor(o.timerMinutes);
     if (THEMES.indexOf(o.theme) >= 0) p.theme = o.theme;
+    if (SCRIPTS.indexOf(o.script) >= 0) p.script = o.script;
     (Array.isArray(o.learned) ? o.learned : []).forEach(function (k) { if (ByKana[k]) p.learned.add(k); });
     if (o.errors && typeof o.errors === 'object') {
       Object.keys(o.errors).forEach(function (k) {
@@ -175,7 +241,7 @@
     var learned = All.filter(function (k) { return self.learned.has(k.K); }).map(function (k) { return k.K; });
     return {
       app: 'kana-small-steps', version: Progress.FILE_VERSION,
-      answered: this.answered, correct: this.correct, goal: this.goal, timerMinutes: this.timerMinutes, theme: this.theme,
+      answered: this.answered, correct: this.correct, goal: this.goal, timerMinutes: this.timerMinutes, theme: this.theme, script: this.script,
       learned: learned, errors: this.errors, days: days, timerState: this.timerState
     };
   };
@@ -254,10 +320,15 @@
   Progress.prototype.errorCount = function () { return Object.keys(this.errors).length; };
 
   // ---------------- Quiz ----------------
-  function Quiz(scope, p, rng) {
+  /**
+   * 测验。mode = 'read'（默认）：看假名选罗马音；mode = 'pair'（2.5.0）：看一种写法，选出另一种写法（あ → ア，ア → あ）。
+   * 配对题考的是片假名，所以无论题面是哪种写法，结果都记在片假名上。
+   */
+  function Quiz(scope, p, rng, mode) {
     this.scope = scope;
     this.state = p;
     this.rng = rng || Math.random;
+    this.mode = mode === 'pair' ? 'pair' : 'read';
     this.items = shuffle(pool(scope, p), this.rng).slice(0, 10);
     this.index = 0;
     this.score = 0;
@@ -267,26 +338,33 @@
   }
   Quiz.prototype.done = function () { return this.index >= this.items.length; };
   Quiz.prototype.current = function () { return this.done() ? null : this.items[this.index]; };
+  /** 当前题的正确选项。 */
+  Quiz.prototype.expected = function () { var x = this.current(); return x ? (this.mode === 'pair' ? x.pair : x.R) : null; };
+  /** 本题的成绩记在哪个假名上。 */
+  Quiz.prototype.target = function () { var x = this.current(); return this.mode === 'pair' && x.script === 'hira' ? ByKana[x.pair] : x; };
+  Quiz.prototype.lastRight = function () { return this.submitted && this.selected === this.expected(); };
   Quiz.prototype.setOptions = function () {
     if (this.done()) { this.options = []; return; }
-    var cur = this.current(), rng = this.rng;
+    var cur = this.current(), rng = this.rng, pair = this.mode === 'pair', want = this.expected();
     var source = shuffle(pool(this.scope, this.state), rng)
       .concat(shuffle(pool(cur.type, this.state), rng))
-      .concat(shuffle(All, rng));
+      .concat(shuffle(All.filter(function (k) { return k.script === cur.script; }), rng));
     var picked = [];
     for (var i = 0; i < source.length && picked.length < 3; i++) {
-      var r = source[i].R;
-      if (r !== cur.R && picked.indexOf(r) < 0) picked.push(r);
+      // 配对题：干扰项取同一种写法的其他假名的另一种写法，保证四个选项都是同一种字形
+      if (pair && source[i].script !== cur.script) continue;
+      var r = pair ? source[i].pair : source[i].R;
+      if (r !== want && picked.indexOf(r) < 0) picked.push(r);
     }
-    this.options = shuffle(picked.concat([cur.R]), rng);
+    this.options = shuffle(picked.concat([want]), rng);
   };
   Quiz.prototype.answer = function (r) {
     if (this.done() || this.submitted || this.options.indexOf(r) < 0) return false;
     this.submitted = true;
     this.selected = r;
-    var right = r === this.current().R;
+    var right = r === this.expected();
     if (right) this.score++;
-    this.state.record(this.current(), right);
+    this.state.record(this.target(), right);
     return true;
   };
   Quiz.prototype.next = function () {
@@ -396,6 +474,8 @@
     coach: function (p) {
       var t = p.today(), streak = p.streak(), errors = p.errorCount(), acc = p.recentAccuracy();
       if (p.learned.size === 0 && p.answered === 0) return '第一次来？从元音「あいうえお」开始，今天认识 5 个假名就很棒。';
+      var next = DailyPlan.nextGroup(p);
+      if (next && next.id === 'Ka' && !p.learned.has('ア')) return '平假名已经全部熟悉！接下来学片假名：读音完全一样，只是换一种写法。';
       if (t.sec / 60 >= p.goal) return '今日目标已完成！想多学可以继续，也可以把精力留给明天。';
       if (errors >= HEAVY_REVIEW) return '有 ' + errors + ' 个错题在等你，今天先专心复习，不急着学新内容。';
       if (acc >= 0 && acc < 0.7) return '最近正确率 ' + Math.round(acc * 100) + '%，建议放慢新内容，多翻卡、多听音。';
@@ -431,27 +511,27 @@
         var chars = target.items.map(function (x) { return x.K; }).join(' ');
         if (known >= target.items.length) {
           tasks.push({
-            title: '学完新的一行：' + target.name, kana: chars,
-            detail: '已熟悉 ' + known + ' / ' + known + (next ? '。还有余力可以继续学「' + next.name + '」。' : '。'),
+            title: '学完新的一行：' + groupLabel(target), kana: chars,
+            detail: '已熟悉 ' + known + ' / ' + known + (next ? '。还有余力可以继续学「' + groupLabel(next) + '」。' : '。'),
             done: true, doneButton: next ? '学下一行' : '综合测验',
             action: next ? 'learnGroup' : 'allQuiz', scope: next ? next.id : null
           });
         } else {
           tasks.push({
-            title: '学习新的一行：' + target.name, kana: chars,
+            title: '学习新的一行：' + groupLabel(target), kana: chars,
             detail: '已熟悉 ' + known + ' / ' + target.items.length + '（翻卡记住或测验答对都算）',
             button: known > 0 ? '继续学习' : '开始学习', action: 'learnGroup', scope: target.id
           });
         }
       } else if (!next) {
-        tasks.push({ title: '全部假名都已标记熟悉', detail: '用「全部假名」测验保持手感，下一步可以开始学片假名。', button: '综合测验', action: 'allQuiz' });
+        tasks.push({ title: '平假名和片假名都已熟悉', detail: '用「平片混合」测验保持手感，下一步可以开始认读简单的词语。', button: '综合测验', action: 'allQuiz' });
       } else if (errors >= HEAVY_REVIEW) {
-        tasks.push({ title: '今天先不学新的一行', detail: '错题有 ' + errors + ' 个，先练熟它们，明天再学「' + next.name + '」效果更好。', action: null });
+        tasks.push({ title: '今天先不学新的一行', detail: '错题有 ' + errors + ' 个，先练熟它们，明天再学「' + groupLabel(next) + '」效果更好。', action: null });
       }
       var quizScope;
       if (target && target.items.some(function (x) { return p.learned.has(x.K); })) quizScope = target.id;
       else if (learned.length >= 4) quizScope = 'learned';
-      else quizScope = target ? target.id : (next ? next.id : 'all');
+      else quizScope = target ? target.id : (next ? next.id : 'mix');
       tasks.push({
         title: '完成一轮 10 题测验',
         detail: t.answered > 0 ? '今天已答 ' + t.answered + ' 题，正确率 ' + Math.round(100 * t.correct / t.answered) + '%。' : '检查记忆最好的办法，就是试着回答。',
@@ -481,8 +561,10 @@
   };
 
   var api = {
-    VERSION: '2.4.1', THEMES: THEMES,
-    Groups: Groups, All: All, ByKana: ByKana, groupById: groupById, pool: pool, deck: deck, note: note, audioKey: audioKey, shuffle: shuffle,
+    VERSION: '2.5.0', THEMES: THEMES, SCRIPTS: SCRIPTS,
+    Groups: Groups, All: All, ByKana: ByKana, groupById: groupById, groupLabel: groupLabel, baseType: baseType, typeFor: typeFor,
+    toKata: toKata, toHira: toHira, kataHint: kataHint,
+    pool: pool, deck: deck, note: note, audioKey: audioKey, shuffle: shuffle,
     GOAL_CHOICES: GOAL_CHOICES, TIMER_CHOICES: TIMER_CHOICES, dayKey: dayKey, addDays: addDays,
     Progress: Progress, Quiz: Quiz, StudyTimer: StudyTimer, DailyPlan: DailyPlan
   };

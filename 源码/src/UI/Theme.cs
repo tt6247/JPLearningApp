@@ -19,6 +19,8 @@ namespace KanaSmallSteps
         public bool Dark;
         public Color Bg, Surface, Surface2, Line, Ink, Muted, Accent, AccentSoft, OnAccent;
         public Color Green, GreenBg, OkBg, OkFg, BadBg, BadFg, Track, Part, Notice, NoticeFg;
+        /// <summary>对照模式下片假名的颜色（2.5.0，与安卓版 --kata 相同）。</summary>
+        public Color Kata;
 
         private static Color C(int rgb)
         {
@@ -33,7 +35,7 @@ namespace KanaSmallSteps
             Ink = C(0x3B362F), Muted = C(0x6F6659),
             Accent = C(0x5F57A8), AccentSoft = C(0xE7E1F0), OnAccent = C(0xFAF7F0),
             Green = C(0x3E7A58), GreenBg = C(0xE2ECDC), OkBg = C(0xD6E8D1), OkFg = C(0x2F6B4A), BadBg = C(0xF3DDD3), BadFg = C(0x9A4436),
-            Track = C(0xE4DDCE), Part = C(0xCEC6E6), Notice = C(0xE9E3EE), NoticeFg = C(0x5A5180)
+            Track = C(0xE4DDCE), Part = C(0xCEC6E6), Notice = C(0xE9E3EE), NoticeFg = C(0x5A5180), Kata = C(0xA2563F)
         };
 
         /// <summary>深色护眼：暖灰黑底、米白文字。</summary>
@@ -44,7 +46,7 @@ namespace KanaSmallSteps
             Ink = C(0xE3DCCF), Muted = C(0xA2998B),
             Accent = C(0xA99DDC), AccentSoft = C(0x35314A), OnAccent = C(0x1D1C1A),
             Green = C(0x83BE9B), GreenBg = C(0x25332B), OkBg = C(0x243A2D), OkFg = C(0x9DD4B1), BadBg = C(0x40292A), BadFg = C(0xE9A79B),
-            Track = C(0x35322D), Part = C(0x544C78), Notice = C(0x2C2A36), NoticeFg = C(0xC3BBE6)
+            Track = C(0x35322D), Part = C(0x544C78), Notice = C(0x2C2A36), NoticeFg = C(0xC3BBE6), Kata = C(0xE4A48C)
         };
     }
 
@@ -81,6 +83,7 @@ namespace KanaSmallSteps
         public static Color Track { get { return P.Track; } }
         public static Color Part { get { return P.Part; } }
         public static Color NoticeFg { get { return P.NoticeFg; } }
+        public static Color Kata { get { return P.Kata; } }
 
         public static string ModeName(string mode)
         {
@@ -323,6 +326,21 @@ namespace KanaSmallSteps
 
         public bool Learned;
 
+        /// <summary>平片对照模式（2.5.0）：同一格里右边再画片假名。</summary>
+        public Kana PairItem;
+
+        public bool PairLearned;
+
+        public KanaTile(Kana x, bool learned, Kana pair, bool pairLearned) : this(x, learned)
+        {
+            PairItem = pair;
+            PairLearned = pairLearned;
+            LearnedHira = learned;
+            Learned = false;
+            Text = x.K + pair.K;
+            AccessibleName = x.K + "，" + pair.K + "，" + x.R + (learned ? "，平假名已熟悉" : "") + (pairLearned ? "，片假名已熟悉" : "");
+        }
+
         public KanaTile(Kana x, bool learned)
         {
             Item = x;
@@ -350,13 +368,20 @@ namespace KanaSmallSteps
             }
             int top = (int)(r.Height * 0.72f);
             int bottom = r.Height - top;
-            using (Font font = Theme.KanaFontPx(Math.Max(12f, r.Height * 0.42f)))
-            using (SolidBrush ink = new SolidBrush(Theme.Ink))
-            using (StringFormat fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            if (PairItem != null)
             {
-                // 假名用 GDI+ 绘制，直接使用内嵌字体
-                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-                e.Graphics.DrawString(Item.K, font, ink, new RectangleF(0, 2, r.Width, top), fmt);
+                PaintPair(e.Graphics, r, top);
+            }
+            else
+            {
+                using (Font font = Theme.KanaFontPx(Math.Max(12f, r.Height * 0.42f)))
+                using (SolidBrush ink = new SolidBrush(Theme.Ink))
+                using (StringFormat fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    // 假名用 GDI+ 绘制，直接使用内嵌字体
+                    e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                    e.Graphics.DrawString(Item.K, font, ink, new RectangleF(0, 2, r.Width, top), fmt);
+                }
             }
             using (Font font2 = new Font("Segoe UI", Math.Max(9f, r.Height * 0.17f), FontStyle.Regular, GraphicsUnit.Pixel))
             {
@@ -370,6 +395,41 @@ namespace KanaSmallSteps
                 }
             }
         }
+
+        /// <summary>左平假名、右片假名；已熟悉的写法下面画一条绿色短线。</summary>
+        private void PaintPair(Graphics g, Rectangle r, int top)
+        {
+            float size = Math.Max(11f, r.Height * (Item.K.Length > 1 ? 0.27f : 0.34f));
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            using (Font font = Theme.KanaFontPx(size))
+            using (StringFormat fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                float half = r.Width / 2f, inset = r.Width * 0.06f;
+                RectangleF left = new RectangleF(inset, 2, half - inset, top);
+                RectangleF right = new RectangleF(half, 2, half - inset, top);
+                using (SolidBrush ink = new SolidBrush(Theme.Ink))
+                using (SolidBrush kata = new SolidBrush(Theme.Kata))
+                {
+                    g.DrawString(Item.K, font, ink, left, fmt);
+                    g.DrawString(PairItem.K, font, kata, right, fmt);
+                }
+                float lineY = 2 + top / 2f + size * 0.62f;
+                using (Pen pen = new Pen(Theme.Green, Math.Max(2f, r.Height * 0.03f)))
+                {
+                    if (LearnedHira)
+                    {
+                        g.DrawLine(pen, left.X + left.Width * 0.25f, lineY, left.Right - left.Width * 0.25f, lineY);
+                    }
+                    if (PairLearned)
+                    {
+                        g.DrawLine(pen, right.X + right.Width * 0.25f, lineY, right.Right - right.Width * 0.25f, lineY);
+                    }
+                }
+            }
+        }
+
+        /// <summary>对照模式下平假名是否已熟悉（Learned 在对照模式下用于整格底色，所以单独记）。</summary>
+        public bool LearnedHira;
 
         protected override void OnGotFocus(EventArgs e)
         {

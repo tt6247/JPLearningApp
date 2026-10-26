@@ -24,11 +24,11 @@ The following third-party materials are included under their own licenses.
                Copyright (C) 2009/2010/2011 Ulrich Apel
    License:    Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
                https://creativecommons.org/licenses/by-sa/3.0/
-   The stroke paths of the 90 hiragana characters were extracted from the
+   The stroke paths of 148 hiragana and katakana characters were extracted from the
    KanjiVG SVG files without modification. These data files remain under
    CC BY-SA 3.0; if you modify and redistribute them, you must do so under
    the same license.
-   从 KanjiVG 提取了 90 个平假名的笔画路径，未作修改。这两个数据文件仍按
+   从 KanjiVG 提取了 148 个平假名和片假名的笔画路径，未作修改。这两个数据文件仍按
    CC BY-SA 3.0 授权；修改后再发布时须使用相同授权。
 
 3. Font / 字体

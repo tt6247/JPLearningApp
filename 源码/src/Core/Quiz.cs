@@ -40,6 +40,42 @@ namespace KanaSmallSteps
 
         private readonly Progress State;
 
+        /// <summary>read = 看假名选罗马音；pair = 看一种写法选另一种写法（2.5.0），成绩记在片假名上。</summary>
+        public readonly string Mode;
+
+        /// <summary>当前题的正确选项。</summary>
+        public string Expected
+        {
+            get
+            {
+                Kana x = Current;
+                if (x == null)
+                {
+                    return null;
+                }
+                return Mode == "pair" ? x.Pair : x.R;
+            }
+        }
+
+        /// <summary>本题成绩记在哪个假名上。</summary>
+        public Kana Target
+        {
+            get
+            {
+                Kana x = Current;
+                if (x != null && Mode == "pair" && x.Script == "hira")
+                {
+                    return Data.ByKana[x.Pair];
+                }
+                return x;
+            }
+        }
+
+        public bool LastRight
+        {
+            get { return Submitted && Selected == Expected; }
+        }
+
         public bool Done
         {
             get { return Index >= Items.Count; }
@@ -57,10 +93,15 @@ namespace KanaSmallSteps
             }
         }
 
-        public Quiz(string scope, Progress p)
+        public Quiz(string scope, Progress p) : this(scope, p, "read")
+        {
+        }
+
+        public Quiz(string scope, Progress p, string mode)
         {
             Scope = scope;
             State = p;
+            Mode = mode == "pair" ? "pair" : "read";
             Items = Randomize.Shuffle(Data.Pool(scope, p)).Take(10).ToList();
             SetOptions();
         }
@@ -72,12 +113,17 @@ namespace KanaSmallSteps
                 Options = new List<string>();
                 return;
             }
-            IEnumerable<Kana> source = Randomize.Shuffle(Data.Pool(Scope, State)).Concat(Randomize.Shuffle(Data.Pool(Current.Type, State))).Concat(Randomize.Shuffle(Data.All));
+            Kana cur = Current;
+            bool pair = Mode == "pair";
+            string want = Expected;
+            IEnumerable<Kana> source = Randomize.Shuffle(Data.Pool(Scope, State)).Concat(Randomize.Shuffle(Data.Pool(cur.Type, State))).Concat(Randomize.Shuffle(Data.All.Where((Kana k) => k.Script == cur.Script)));
+            // 配对题：干扰项取同一种写法的其他假名的另一种写法，保证四个选项字形一致
             IEnumerable<string> first = (from x in source
-                select x.R into r
-                where r != Current.R
+                where !pair || x.Script == cur.Script
+                select pair ? x.Pair : x.R into r
+                where r != want
                 select r).Distinct().Take(3);
-            Options = Randomize.Shuffle(first.Concat(new string[1] { Current.R }));
+            Options = Randomize.Shuffle(first.Concat(new string[1] { want }));
         }
 
         public bool Answer(string r)
@@ -88,12 +134,12 @@ namespace KanaSmallSteps
             }
             Submitted = true;
             Selected = r;
-            bool flag = r == Current.R;
+            bool flag = r == Expected;
             if (flag)
             {
                 Score++;
             }
-            State.Record(Current, flag);
+            State.Record(Target, flag);
             return true;
         }
 

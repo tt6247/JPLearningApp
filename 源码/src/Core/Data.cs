@@ -15,6 +15,12 @@ namespace KanaSmallSteps
         public string Type;
 
         public int Column;
+
+        /// <summary>hira = 平假名，kata = 片假名（2.5.0）。</summary>
+        public string Script = "hira";
+
+        /// <summary>另一种写法（あ ↔ ア）。</summary>
+        public string Pair;
     }
 
     public sealed class KanaGroup
@@ -24,6 +30,8 @@ namespace KanaSmallSteps
         public string Name;
 
         public string Type;
+
+        public string Script = "hira";
 
         public List<Kana> Items = new List<Kana>();
     }
@@ -63,7 +71,8 @@ namespace KanaSmallSteps
                             R = array3[j],
                             Group = kanaGroup2.Id,
                             Type = kanaGroup2.Type,
-                            Column = j
+                            Column = j,
+                            Pair = ToKata(array2[2][j].ToString())
                         });
                     }
                 }
@@ -93,12 +102,73 @@ namespace KanaSmallSteps
                         R = array8[l],
                         Group = kanaGroup4.Id,
                         Type = kanaGroup4.Type,
-                        Column = l
+                        Column = l,
+                        Pair = ToKata(array7[l])
                     });
                 }
                 list.Add(kanaGroup4);
             }
+            // 2.5.0：每个平假名组都有对应的片假名组（id 加前缀 K，type 加前缀 k），行列和读音相同
+            foreach (KanaGroup h in list.ToList())
+            {
+                KanaGroup g = new KanaGroup { Id = "K" + h.Id, Name = ToKata(h.Name), Type = "k" + h.Type, Script = "kata" };
+                foreach (Kana x in h.Items)
+                {
+                    g.Items.Add(new Kana { K = x.Pair, R = x.R, Group = g.Id, Type = g.Type, Column = x.Column, Script = "kata", Pair = x.K });
+                }
+                list.Add(g);
+            }
             return list;
+        }
+
+        /// <summary>平假名 → 片假名（两者在 Unicode 中相差 0x60）。</summary>
+        public static string ToKata(string s)
+        {
+            char[] a = s.ToCharArray();
+            for (int i = 0; i < a.Length; i++)
+            {
+                if (a[i] >= '\u3041' && a[i] <= '\u3096')
+                {
+                    a[i] = (char)(a[i] + 0x60);
+                }
+            }
+            return new string(a);
+        }
+
+        public static string ToHira(string s)
+        {
+            char[] a = s.ToCharArray();
+            for (int i = 0; i < a.Length; i++)
+            {
+                if (a[i] >= '\u30A1' && a[i] <= '\u30F6')
+                {
+                    a[i] = (char)(a[i] - 0x60);
+                }
+            }
+            return new string(a);
+        }
+
+        public static KanaGroup GroupById(string id)
+        {
+            return Groups.FirstOrDefault((KanaGroup g) => g.Id == id);
+        }
+
+        /// <summary>不区分平片的类别：basic / voiced / combo。</summary>
+        public static string BaseType(Kana x)
+        {
+            return x.Type.StartsWith("k") ? x.Type.Substring(1) : x.Type;
+        }
+
+        /// <summary>某类别在某种写法下的范围 id：("basic", "kata") → "kbasic"。</summary>
+        public static string TypeFor(string category, string script)
+        {
+            return (script == "kata" ? "k" : "") + category;
+        }
+
+        /// <summary>用于列表和计划的组名：片假名组加前缀，避免「元音」「拨音」两种写法同名。</summary>
+        public static string GroupLabel(KanaGroup g)
+        {
+            return (g.Script == "kata" ? "片假名 · " : "") + g.Name;
         }
 
         public static List<Kana> Pool(string scope, Progress p)
@@ -112,6 +182,14 @@ namespace KanaSmallSteps
                 return All.Where((Kana k) => p.Learned.Contains(k.K)).ToList();
             }
             if (scope == "all")
+            {
+                return All.Where((Kana k) => k.Script == "hira").ToList();
+            }
+            if (scope == "kall")
+            {
+                return All.Where((Kana k) => k.Script == "kata").ToList();
+            }
+            if (scope == "mix")
             {
                 return All.ToList();
             }
@@ -128,8 +206,55 @@ namespace KanaSmallSteps
             return shuffled ? Randomize.Shuffle(pool) : pool;
         }
 
+        private static readonly Dictionary<string, string> KataConfuse = new Dictionary<string, string>
+        {
+            { "シ", "シ 和 ツ 形近：シ 的两点在左边上下排，笔势偏横，最后一笔从左下往右上挑；ツ 的两点在上方左右排，笔势偏竖，最后一笔从右上往左下撇。" },
+            { "ツ", "ツ 和 シ 形近：ツ 的两点在上方左右排，笔势偏竖，最后一笔从右上往左下撇；シ 的两点在左边上下排，最后一笔从左下往右上挑。" },
+            { "ソ", "ソ 和 ン 形近：ソ 的点偏竖，第二笔从右上往左下撇；ン 的点偏横，第二笔从左下往右上挑。" },
+            { "ン", "ン 和 ソ 形近：ン 的点偏横，第二笔从左下往右上挑；ソ 的点偏竖，第二笔从右上往左下撇。" }
+        };
+
+        private const string KataLookalike = "カキヘリモヤセ";
+
+        /// <summary>片假名的额外提示（形近字、与平假名相像的字），没有时返回空字符串。与安卓版 kataHint 相同。</summary>
+        public static string KataHint(Kana x)
+        {
+            string k = x.Script == "kata" ? x.K : x.Pair;
+            string t;
+            if (KataConfuse.TryGetValue(k, out t))
+            {
+                return t;
+            }
+            if (k.Length == 1 && KataLookalike.IndexOf(k, StringComparison.Ordinal) >= 0)
+            {
+                return k + " 和平假名「" + ToHira(k) + "」长得很像，可以对照着记。";
+            }
+            return "";
+        }
+
         public static string Note(Kana x)
         {
+            if (x.Script == "kata")
+            {
+                if (x.K == "ヲ")
+                {
+                    return "通常读 o，现代多只出现在特殊用法中；罗马音写作 wo。";
+                }
+                if (x.K == "ン")
+                {
+                    return "拨音，占一拍；" + KataConfuse["ン"];
+                }
+                if (x.K == "ヂ" || x.K == "ヅ")
+                {
+                    return "ヂ通常与ジ同音，ヅ通常与ズ同音，实际很少用到。";
+                }
+                if (x.K.Length > 1)
+                {
+                    return "后一个字是小写的ャ、ュ或ョ；两个字合起来占一拍，例如 キャ。";
+                }
+                string hint = KataHint(x);
+                return hint.Length > 0 ? hint : "片假名多用于外来语、拟声词和强调，读音与平假名「" + x.Pair + "」相同。";
+            }
             if (x.K == "を")
             {
                 return "通常读 o；罗马音写作 wo，用于区别「お」。";

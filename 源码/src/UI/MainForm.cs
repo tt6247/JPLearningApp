@@ -48,6 +48,9 @@ namespace KanaSmallSteps
 
         private Quiz Test;
 
+        /// <summary>测验题型：read 看字选读音 / pair 平片配对（2.5.0）。</summary>
+        private string QuizMode = "read";
+
         private readonly OfflineAudio Audio;
 
         private float DpiFactor = 1f;
@@ -118,7 +121,7 @@ namespace KanaSmallSteps
             flowLayoutPanel.Controls.Add(BrandLabel);
             TagLabel = new Label
             {
-                Text = "HIRAGANA / 桌面版",
+                Text = "平假名 · 片假名 / 桌面版",
                 Font = Theme.Font(9f, false),
                 ForeColor = Theme.Muted,
                 Width = 170,
@@ -269,7 +272,9 @@ namespace KanaSmallSteps
 
         private void RefreshStatus()
         {
-            Status.Text = ((State.Warning.Length > 0) ? State.Warning : ("进度自动保存到本机  ·  已熟悉 " + State.Learned.Count + " / 104  ·  待复习 " + State.Errors.Count + " 个  ·  今日专注 " + (int)(State.Today.Seconds / 60) + " 分钟"));
+            int hira = Data.Pool("all", State).Count((Kana x) => State.Learned.Contains(x.K));
+            int kata = Data.Pool("kall", State).Count((Kana x) => State.Learned.Contains(x.K));
+            Status.Text = ((State.Warning.Length > 0) ? State.Warning : ("进度自动保存到本机  ·  已熟悉 平假名 " + hira + " / 104，片假名 " + kata + " / 104  ·  待复习 " + State.Errors.Count + " 个  ·  今日专注 " + (int)(State.Today.Seconds / 60) + " 分钟"));
             Status.ForeColor = ((State.Warning.Length > 0) ? Theme.BadFg : Theme.Muted);
         }
 
@@ -288,7 +293,7 @@ namespace KanaSmallSteps
             }
             if (page == "quiz")
             {
-                Test = new Quiz(Scope, State);
+                Test = new Quiz(Scope, State, QuizMode);
             }
             Render();
         }
@@ -352,11 +357,45 @@ namespace KanaSmallSteps
             return flowLayoutPanel;
         }
 
+        /// <summary>五十音表 / 分组学习顶部的字形切换（2.5.0），选择记在进度文件里。</summary>
+        private FlowLayoutPanel Scripts()
+        {
+            string[,] array = new string[3, 2]
+            {
+                { "hira", "平假名" },
+                { "kata", "片假名" },
+                { "both", "平片对照" }
+            };
+            FlowLayoutPanel flowLayoutPanel = Actions();
+            Label label = Theme.Label("字形", 10f, false, 34);
+            label.Width = 46;
+            label.Dock = DockStyle.None;
+            flowLayoutPanel.Controls.Add(label);
+            for (int i = 0; i < 3; i++)
+            {
+                string id = array[i, 0];
+                flowLayoutPanel.Controls.Add(Theme.Button(array[i, 1], delegate
+                {
+                    State.Script = id;
+                    Save();
+                    Render();
+                }, State.Script == id));
+            }
+            return flowLayoutPanel;
+        }
+
+        /// <summary>当前字形下某类别的范围；对照模式以平假名为准。</summary>
+        private string CatScope(string category)
+        {
+            return Data.TypeFor(category, State.Script == "kata" ? "kata" : "hira");
+        }
+
         private void RenderStats()
         {
-            StatsRow(new string[3] { "清音已熟悉", "测验正确率", "待复习假名" }, new string[3]
+            bool kata = State.Script == "kata";
+            StatsRow(new string[3] { kata ? "片假名清音已熟悉" : "平假名清音已熟悉", "测验正确率", "待复习假名" }, new string[3]
             {
-                Data.Pool("basic", State).Count((Kana x) => State.Learned.Contains(x.K)) + " / 46",
+                Data.Pool(kata ? "kbasic" : "basic", State).Count((Kana x) => State.Learned.Contains(x.K)) + " / 46",
                 (State.Answered > 0) ? (Math.Round(100.0 * (double)State.Correct / (double)State.Answered) + "%  ·  " + State.Answered + "题") : "尚未测验",
                 State.Errors.Count + " 个"
             });
@@ -390,10 +429,23 @@ namespace KanaSmallSteps
 
         private void RenderTable()
         {
-            BeginPage("从「あ」开始，读懂日语。", "点开一个假名，查看读音、听发音，再标记熟悉。今天先学一行就好。");
+            bool both = State.Script == "both";
+            if (State.Script == "kata")
+            {
+                BeginPage("从「ア」开始，认识片假名。", "片假名和平假名读音完全相同，多用于外来语和拟声词。熟悉状态与平假名分开记。");
+            }
+            else if (both)
+            {
+                BeginPage("一张表，两种写法。", "左边平假名，右边片假名；下划线表示这种写法已熟悉。点开格子可以分别标记。");
+            }
+            else
+            {
+                BeginPage("从「あ」开始，读懂日语。", "点开一个假名，查看读音、听发音，再标记熟悉。今天先学一行就好。");
+            }
             RenderStats();
+            Add(Scripts());
             Add(Categories());
-            List<KanaGroup> list = Data.Groups.Where((KanaGroup g) => g.Type == Category).ToList();
+            List<KanaGroup> list = Data.Groups.Where((KanaGroup g) => g.Type == CatScope(Category)).ToList();
             int num = ((Category == "combo") ? 3 : 5);
             TableLayoutPanel tableLayoutPanel = new TableLayoutPanel();
             tableLayoutPanel.ColumnCount = num + 1;
@@ -425,7 +477,9 @@ namespace KanaSmallSteps
                 foreach (Kana item2 in kanaGroup.Items)
                 {
                     Kana item = item2;
-                    KanaTile kanaTile = new KanaTile(item2, State.Learned.Contains(item2.K));
+                    KanaTile kanaTile = both
+                        ? new KanaTile(item2, State.Learned.Contains(item2.K), Data.ByKana[item2.Pair], State.Learned.Contains(item2.Pair))
+                        : new KanaTile(item2, State.Learned.Contains(item2.K));
                     kanaTile.Click += delegate
                     {
                         ShowDetail(item);
@@ -434,22 +488,37 @@ namespace KanaSmallSteps
                 }
             }
             Add(tableLayoutPanel2);
-            Add(Actions(Theme.Button("学习当前范围 →", delegate
+            if (both)
             {
-                StartCards(Category);
-            }, true), Theme.Button("零基础学习指南", delegate
+                Add(Actions(Theme.Button("学平假名 →", delegate
+                {
+                    StartCards(Data.TypeFor(Category, "hira"));
+                }, false), Theme.Button("学片假名 →", delegate
+                {
+                    StartCards(Data.TypeFor(Category, "kata"));
+                }, true)));
+            }
+            else
             {
-                Navigate("help");
-            }, false)));
-            Add(Theme.Label((Category == "basic") ? "「五十音」是表格名称；现代常用清音共 46 个。绿色 ✓ 表示已熟悉。" : ((Category == "voiced") ? "「\u309b」是浊点，「\u309c」是半浊点。じ/ぢ、ず/づ 通常同音，之后在词语中区别写法。" : "小写的ゃ・ゅ・ょ与前字合成一拍；きゃ（kya）和 きや（ki-ya）不同。"), 10f, false, 52));
+                Add(Actions(Theme.Button("学习当前范围 →", delegate
+                {
+                    StartCards(CatScope(Category));
+                }, true), Theme.Button("零基础学习指南", delegate
+                {
+                    Navigate("help");
+                }, false)));
+            }
+            Add(Theme.Label((Category == "basic") ? "「五十音」是表格名称；现代常用清音共 46 个。" + (both ? "" : "绿色 ✓ 表示已熟悉。") + (State.Script != "hira" ? "注意形近的 シ / ツ、ソ / ン。" : "") : ((Category == "voiced") ? "「\u309b」是浊点，「\u309c」是半浊点。じ/ぢ、ず/づ 通常同音，之后在词语中区别写法。" : "小写的ゃ・ゅ・ょ与前字合成一拍；きゃ（kya）和 きや（ki-ya）不同。"), 10f, false, 52));
             FinishPage();
         }
 
         private void RenderGroups()
         {
-            BeginPage("一次一行，稳稳记住。", "推荐顺序：元音 → 其他清音 → 浊音 / 半浊音 → 拗音。选一组开始翻卡。");
+            BeginPage("一次一行，稳稳记住。", "推荐顺序：先学完平假名（元音 → 清音 → 浊音 / 半浊音 → 拗音），再按同样的顺序学片假名。选一组开始翻卡。");
+            Add(Scripts());
             Add(Categories());
-            List<KanaGroup> list = Data.Groups.Where((KanaGroup g) => g.Type == Category).ToList();
+            bool both = State.Script == "both";
+            List<KanaGroup> list = Data.Groups.Where((KanaGroup g) => g.Type == CatScope(Category) || (both && g.Type == Data.TypeFor(Category, "kata"))).ToList();
             TableLayoutPanel tableLayoutPanel = new TableLayoutPanel();
             tableLayoutPanel.ColumnCount = 3;
             tableLayoutPanel.RowCount = (list.Count + 2) / 3;
@@ -466,7 +535,7 @@ namespace KanaSmallSteps
             for (int k = 0; k < list.Count; k++)
             {
                 KanaGroup g2 = list[k];
-                Button button = Theme.Button(g2.Name + "\n" + string.Join(" ", g2.Items.Select((Kana x) => x.K)) + "\n" + g2.Items.Count((Kana x) => State.Learned.Contains(x.K)) + " / " + g2.Items.Count + " 已熟悉", delegate
+                Button button = Theme.Button((both ? (g2.Script == "kata" ? "片假名 · " : "平假名 · ") : "") + g2.Name + "\n" + string.Join(" ", g2.Items.Select((Kana x) => x.K)) + "\n" + g2.Items.Count((Kana x) => State.Learned.Contains(x.K)) + " / " + g2.Items.Count + " 已熟悉", delegate
                 {
                     StartCards(g2.Id);
                 }, false);
@@ -494,42 +563,29 @@ namespace KanaSmallSteps
                 AccessibleName = "学习范围"
             };
             Theme.StyleCombo(box);
-            List<ScopeOption> list = new List<ScopeOption>();
-            list.Add(new ScopeOption
+            List<ScopeOption> list2 = new List<ScopeOption>();
+            string[,] fixedScopes = new string[11, 2]
             {
-                Id = "basic",
-                Name = "全部清音（46）"
-            });
-            list.Add(new ScopeOption
+                { "basic", "平假名 · 清音（46）" },
+                { "voiced", "平假名 · 浊音 / 半浊音（25）" },
+                { "combo", "平假名 · 拗音（33）" },
+                { "all", "全部平假名（104）" },
+                { "kbasic", "片假名 · 清音（46）" },
+                { "kvoiced", "片假名 · 浊音 / 半浊音（25）" },
+                { "kcombo", "片假名 · 拗音（33）" },
+                { "kall", "全部片假名（104）" },
+                { "mix", "平片混合（208）" },
+                { "errors", "待复习错题" },
+                { "learned", "已熟悉假名（巩固）" }
+            };
+            for (int i = 0; i < fixedScopes.GetLength(0); i++)
             {
-                Id = "voiced",
-                Name = "浊音 / 半浊音（25）"
-            });
-            list.Add(new ScopeOption
-            {
-                Id = "combo",
-                Name = "常用拗音（33）"
-            });
-            list.Add(new ScopeOption
-            {
-                Id = "all",
-                Name = "全部假名（104）"
-            });
-            list.Add(new ScopeOption
-            {
-                Id = "errors",
-                Name = "待复习错题"
-            });
-            list.Add(new ScopeOption
-            {
-                Id = "learned",
-                Name = "已熟悉假名（巩固）"
-            });
-            List<ScopeOption> list2 = list;
+                list2.Add(new ScopeOption { Id = fixedScopes[i, 0], Name = fixedScopes[i, 1] });
+            }
             list2.AddRange(Data.Groups.Select((KanaGroup g) => new ScopeOption
             {
                 Id = g.Id,
-                Name = g.Name + " · " + string.Join("", g.Items.Select((Kana x) => x.K))
+                Name = (g.Script == "kata" ? "片假名按行 · " : "平假名按行 · ") + g.Name + " · " + string.Join("", g.Items.Select((Kana x) => x.K))
             }));
             box.Items.AddRange(list2.Cast<object>().ToArray());
             box.SelectedIndex = list2.FindIndex((ScopeOption x) => x.Id == Scope);
@@ -541,7 +597,7 @@ namespace KanaSmallSteps
                     Scope = scopeOption.Id;
                     if (quiz)
                     {
-                        Test = new Quiz(Scope, State);
+                        Test = new Quiz(Scope, State, QuizMode);
                     }
                     else
                     {
@@ -557,7 +613,7 @@ namespace KanaSmallSteps
             {
                 if (quiz)
                 {
-                    Test = new Quiz(Scope, State);
+                    Test = new Quiz(Scope, State, QuizMode);
                 }
                 else
                 {
@@ -586,7 +642,7 @@ namespace KanaSmallSteps
         private void StartQuiz(string scope)
         {
             Scope = scope;
-            Test = new Quiz(scope, State);
+            Test = new Quiz(scope, State, QuizMode);
             Page = "quiz";
             Render();
         }
@@ -633,7 +689,7 @@ namespace KanaSmallSteps
                 Flipped = !Flipped;
                 Render();
             };
-            Label label = Theme.Label(Flipped ? x.R : "· · ·  点击卡片，核对读音", Flipped ? 28 : 12, Flipped, 58);
+            Label label = Theme.Label(Flipped ? x.R + "    " + (x.Script == "kata" ? "平假名 " : "片假名 ") + x.Pair : "· · ·  点击卡片，核对读音", Flipped ? 24 : 12, Flipped, 58);
             label.TextAlign = ContentAlignment.MiddleCenter;
             label.ForeColor = Theme.Purple;
             if (hasStrokes)
@@ -707,15 +763,34 @@ namespace KanaSmallSteps
         {
             if (Test == null)
             {
-                Test = new Quiz(Scope, State);
+                Test = new Quiz(Scope, State, QuizMode);
             }
-            BeginPage("这个假名，怎么读？", "选择正确的罗马音。答题后可以听发音；错题会自动进入复习。");
+            bool pairMode = Test.Mode == "pair";
+            if (pairMode)
+            {
+                BeginPage("平假名和片假名，配成一对。", "看一种写法，选出另一种写法。成绩记在片假名上，答错的会进入复习。");
+            }
+            else
+            {
+                BeginPage("这个假名，怎么读？", "选择正确的罗马音。答题后可以听发音；错题会自动进入复习。");
+            }
+            Label modeLabel = Theme.Label("题型", 10f, false, 34);
+            modeLabel.Width = 76;
+            modeLabel.Dock = DockStyle.None;
+            Add(Actions(modeLabel, Theme.Button("看字选读音", delegate
+            {
+                SetQuizMode("read");
+            }, !pairMode), Theme.Button("平片配对", delegate
+            {
+                SetQuizMode("pair");
+            }, pairMode)));
             Add(ScopeBar(true));
             if (Test.Items.Count == 0)
             {
                 Add(Theme.Label(Scope == "learned" ? "还没有已熟悉的假名，先用记忆卡学一行吧。" : "当前没有待复习的错题。", 18f, true, 90));
                 Add(Actions(Theme.Button("从清音开始测验", delegate
                 {
+                    QuizMode = "read";
                     StartQuiz("basic");
                 }, true)));
                 FinishPage();
@@ -736,7 +811,10 @@ namespace KanaSmallSteps
                 return;
             }
             Kana x = Test.Current;
-            Add(Theme.Label("假名 → 读音     " + (Test.Index + 1) + " / " + Test.Items.Count, 10f, false, 28));
+            string want = Test.Expected;
+            Kana target = Test.Target;
+            string dir = pairMode ? (x.Script == "hira" ? "平假名 → 片假名" : "片假名 → 平假名") : "假名 → 读音";
+            Add(Theme.Label(dir + "     " + (Test.Index + 1) + " / " + Test.Items.Count, 10f, false, 28));
             KanaGlyph label = new KanaGlyph(x.K, 76f) { Height = 165, BackColor = Theme.Paper };
             Add(label);
             TableLayoutPanel tableLayoutPanel = new TableLayoutPanel();
@@ -760,7 +838,7 @@ namespace KanaSmallSteps
                     }
                 }, false);
                 button.AutoSize = false;
-                button.Font = Theme.Font(21f, false);
+                button.Font = Theme.Font(pairMode ? 26f : 21f, false);
                 button.Dock = DockStyle.Fill;
                 button.Margin = new Padding(4);
                 button.BackColor = Theme.Surface;
@@ -772,7 +850,7 @@ namespace KanaSmallSteps
                     // 不用 Enabled = false：禁用的按钮文字会被系统画成灰色，深色模式下看不清
                     button.Tag = "locked";
                     button.Cursor = Cursors.Default;
-                    if (r == x.R)
+                    if (r == want)
                     {
                         button.BackColor = Theme.OkBg;
                         button.ForeColor = Theme.OkFg;
@@ -791,7 +869,16 @@ namespace KanaSmallSteps
             string text = "先凭记忆作答。";
             if (Test.Submitted)
             {
-                text = ((Test.Selected == x.R) ? ("✓ 答对了！" + (State.Errors.ContainsKey(x.K) ? "还需再答对一次才能移出错题。" : "")) : ("再记一次：" + x.K + " 的读音是 " + x.R + "。已加入错题。"));
+                if (pairMode)
+                {
+                    text = Test.LastRight
+                        ? "✓ 答对了！" + x.K + " ↔ " + want + "（" + x.R + "）。" + (State.Errors.ContainsKey(target.K) ? "还需再答对一次才能移出错题。" : "")
+                        : "再记一次：" + x.K + " 的" + (x.Script == "hira" ? "片假名" : "平假名") + "是 " + want + "（" + x.R + "）。" + target.K + " 已加入错题。";
+                }
+                else
+                {
+                    text = Test.LastRight ? ("✓ 答对了！" + (State.Errors.ContainsKey(x.K) ? "还需再答对一次才能移出错题。" : "")) : ("再记一次：" + x.K + " 的读音是 " + x.R + "。已加入错题。");
+                }
             }
             Add(Theme.Label(text, 12f, false, 48));
             if (Test.Submitted)
@@ -818,6 +905,7 @@ namespace KanaSmallSteps
                 Add(Theme.Label("这里干干净净。来一轮测验，看看记住了多少。", 13f, false, 70));
                 Add(Actions(Theme.Button("从清音开始测验", delegate
                 {
+                    QuizMode = "read";
                     StartQuiz("basic");
                 }, true)));
             }
@@ -846,7 +934,7 @@ namespace KanaSmallSteps
                 for (int k = 0; k < list.Count; k++)
                 {
                     Kana x = list[k];
-                    Button button = Theme.Button(x.K + "  " + x.R + "\n还需答对 " + State.Errors[x.K] + " 次", delegate
+                    Button button = Theme.Button(x.K + "  " + x.R + (x.Script == "kata" ? " · 片" : "") + "\n还需答对 " + State.Errors[x.K] + " 次", delegate
                     {
                         ShowDetail(x);
                     }, false);
@@ -870,9 +958,11 @@ namespace KanaSmallSteps
             Add(Theme.Label("每天 10–15 分钟，先从 5 个假名开始", 19f, true, 56));
             Add(Theme.Label("① 选一行：点开字形，看罗马音，听发音。\n② 翻记忆卡：先尝试回想，再点开答案。\n③ 做一轮测验：每轮最多 10 题，小组不足 10 个时全部练习。\n④ 第二天先复习错题，再学新的一行。", 12f, false, 155));
             Add(Theme.Label("认读时要注意", 17f, true, 44));
-            Add(Theme.Label("罗马音是临时提示，不是中文拼音。し读 shi、ち读 chi、つ读 tsu、ふ读 fu；ら行不等于英语 r。を通常读 o；は、へ作助词时读 wa、e。\n\n先学 46 个清音，再学浊音、半浊音和常用拗音。拗音有小写的ゃ、ゅ、ょ，与前字一起占一拍。之后还要学习片假名、词汇与语法，才能逐步阅读喜欢的故事。", 11f, false, 172));
+            Add(Theme.Label("罗马音是临时提示，不是中文拼音。し读 shi、ち读 chi、つ读 tsu、ふ读 fu；ら行不等于英语 r。を通常读 o；は、へ作助词时读 wa、e。\n\n先学 46 个清音，再学浊音、半浊音和常用拗音。拗音有小写的ゃ、ゅ、ょ，与前字一起占一拍。平假名都熟悉后，「今日计划」会接着推荐片假名；之后还要学习词汇与语法，才能逐步阅读喜欢的故事。", 11f, false, 172));
+            Add(Theme.Label("片假名", 17f, true, 44));
+            Add(Theme.Label("片假名和平假名读音完全相同，多用于外来语（コーヒー 咖啡）、拟声词和强调。五十音表和分组学习顶部可以切换「平假名 / 片假名 / 平片对照」；两种写法的熟悉状态分开记。\n测验里的「平片配对」会给出一种写法，让你选出另一种写法，专门练两者的对应。注意形近的 シ / ツ、ソ / ン。", 11f, false, 98));
             Add(Theme.Label("使用与进度", 17f, true, 44));
-            Add(Theme.Label("这是原生 Windows 桌面程序，不调用浏览器或 WebView，也无需联网。104 个发音片段内置在程序中，无需额外安装日语语音包。进度自动保存在本机；关闭再打开可继续学习。网页版本的浏览器进度不会自动迁移。", 11f, false, 115));
+            Add(Theme.Label("这是原生 Windows 桌面程序，不调用浏览器或 WebView，也无需联网。104 个发音片段内置在程序中（片假名与平假名共用），无需额外安装日语语音包。进度自动保存在本机；关闭再打开可继续学习。网页版本的浏览器进度不会自动迁移。", 11f, false, 115));
             Add(Theme.Label("录音来源与授权", 17f, true, 44));
             Add(Theme.Label("录音：FUN Japanese Learning（https://funjapaneselearning.com）。\n数据集整理：Arsalan Anwari，Kana Sounds。\nhttps://huggingface.co/datasets/arsalan-anwari/kana-sounds\n授权：Creative Commons Attribution 4.0（CC BY 4.0）。\nhttps://creativecommons.org/licenses/by/4.0/\n录音按原样内置；调整了文件标识以匹配本程序的罗马音显示。", 10f, false, 153));
             Add(Theme.Label("笔顺与字体", 17f, true, 44));
@@ -893,12 +983,26 @@ namespace KanaSmallSteps
             FinishPage();
         }
 
+        internal void SetQuizMode(string mode)
+        {
+            if (QuizMode != mode)
+            {
+                QuizMode = mode;
+                Test = new Quiz(Scope, State, QuizMode);
+                Render();
+            }
+        }
+
+        /// <summary>假名详情：同时显示平假名和片假名，可以分别标记熟悉（2.5.0）。</summary>
         private void ShowDetail(Kana x)
         {
+            Kana h = x.Script == "hira" ? x : Data.ByKana[x.Pair];
+            Kana k = Data.ByKana[h.Pair];
+            string extra = x.Script == "hira" ? Data.KataHint(x) : "";
             Form form = new Form();
             form.AutoScaleMode = AutoScaleMode.None;
-            form.Text = "假名读音 · " + x.K;
-            form.ClientSize = new Size(460, 420);
+            form.Text = "假名读音 · " + h.K + " / " + k.K;
+            form.ClientSize = new Size(500, extra.Length > 0 ? 540 : 480);
             form.Font = Font;
             form.BackColor = Theme.Paper;
             form.HandleCreated += delegate { Theme.StyleTitleBar(form); };
@@ -909,44 +1013,78 @@ namespace KanaSmallSteps
             form.ShowInTaskbar = false;
             using (Form form2 = form)
             {
-                TableLayoutPanel tableLayoutPanel = new TableLayoutPanel();
-                tableLayoutPanel.Dock = DockStyle.Fill;
-                tableLayoutPanel.ColumnCount = 1;
-                tableLayoutPanel.Padding = new Padding(24);
-                tableLayoutPanel.RowCount = 5;
-                TableLayoutPanel tableLayoutPanel2 = tableLayoutPanel;
-                tableLayoutPanel2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-                int[] array = new int[5] { 35, 135, 55, 76, 66 };
-                int[] array2 = array;
-                foreach (int num in array2)
+                TableLayoutPanel table = new TableLayoutPanel();
+                table.Dock = DockStyle.Fill;
+                table.ColumnCount = 1;
+                table.Padding = new Padding(24, 18, 24, 18);
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                List<int> rows = new List<int> { 32, 150, 52, 64 };
+                if (extra.Length > 0)
                 {
-                    tableLayoutPanel2.RowStyles.Add(new RowStyle(SizeType.Absolute, num));
+                    rows.Add(66);
                 }
-                Label label = Theme.Label(Data.Groups.First((KanaGroup g) => g.Id == x.Group).Name, 11f, false, 32);
-                label.TextAlign = ContentAlignment.MiddleCenter;
-                tableLayoutPanel2.Controls.Add(label, 0, 0);
-                KanaGlyph label2 = new KanaGlyph(x.K, 72f) { Dock = DockStyle.Fill, BackColor = Theme.Paper };
-                tableLayoutPanel2.Controls.Add(label2, 0, 1);
-                Label label3 = Theme.Label(x.R, 26f, true, 55);
-                label3.TextAlign = ContentAlignment.MiddleCenter;
-                label3.ForeColor = Theme.Purple;
-                tableLayoutPanel2.Controls.Add(label3, 0, 2);
-                Label label4 = Theme.Label(Data.Note(x), 10f, false, 74);
-                label4.TextAlign = ContentAlignment.MiddleCenter;
-                tableLayoutPanel2.Controls.Add(label4, 0, 3);
-                Button mark = null;
-                mark = Theme.Button(State.Learned.Contains(x.K) ? "取消熟悉标记" : "标记为已熟悉 ✓", delegate
+                rows.Add(56);
+                rows.Add(52);
+                table.RowCount = rows.Count;
+                foreach (int num in rows)
                 {
-                    State.ToggleLearned(x);
+                    table.RowStyles.Add(new RowStyle(SizeType.Absolute, num));
+                }
+                int row = 0;
+                Label group = Theme.Label(Data.GroupLabel(Data.GroupById(x.Group)), 11f, false, 30);
+                group.TextAlign = ContentAlignment.MiddleCenter;
+                table.Controls.Add(group, 0, row++);
+                TableLayoutPanel pair = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0), BackColor = Theme.Paper };
+                pair.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+                pair.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+                pair.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+                pair.RowStyles.Add(new RowStyle(SizeType.Absolute, 26f));
+                KanaGlyph hg = new KanaGlyph(h.K, 60f) { Dock = DockStyle.Fill, BackColor = Theme.Paper };
+                KanaGlyph kg = new KanaGlyph(k.K, 60f) { Dock = DockStyle.Fill, BackColor = Theme.Paper, ForeColor = Theme.Kata };
+                pair.Controls.Add(hg, 0, 0);
+                pair.Controls.Add(kg, 1, 0);
+                Label hl = Theme.Label("平假名", 9f, x == h, 24);
+                Label kl = Theme.Label("片假名", 9f, x == k, 24);
+                hl.TextAlign = ContentAlignment.MiddleCenter;
+                kl.TextAlign = ContentAlignment.MiddleCenter;
+                pair.Controls.Add(hl, 0, 1);
+                pair.Controls.Add(kl, 1, 1);
+                table.Controls.Add(pair, 0, row++);
+                Label roman = Theme.Label(x.R, 24f, true, 50);
+                roman.TextAlign = ContentAlignment.MiddleCenter;
+                roman.ForeColor = Theme.Purple;
+                table.Controls.Add(roman, 0, row++);
+                Label note = Theme.Label(Data.Note(x), 10f, false, 62);
+                note.TextAlign = ContentAlignment.MiddleCenter;
+                table.Controls.Add(note, 0, row++);
+                if (extra.Length > 0)
+                {
+                    Label tip = Theme.Label(extra, 9.5f, false, 62);
+                    tip.BackColor = Theme.Surface2;
+                    tip.Padding = new Padding(10, 4, 10, 4);
+                    table.Controls.Add(tip, 0, row++);
+                }
+                Button markH = null, markK = null;
+                markH = Theme.Button(MarkText(h, "平假名"), delegate
+                {
+                    State.ToggleLearned(h);
                     Save();
-                    mark.Text = (State.Learned.Contains(x.K) ? "取消熟悉标记" : "标记为已熟悉 ✓");
-                    mark.AccessibleName = mark.Text;
+                    markH.Text = MarkText(h, "平假名");
+                    markH.AccessibleName = markH.Text;
+                }, false);
+                markK = Theme.Button(MarkText(k, "片假名"), delegate
+                {
+                    State.ToggleLearned(k);
+                    Save();
+                    markK.Text = MarkText(k, "片假名");
+                    markK.AccessibleName = markK.Text;
                 }, true);
-                tableLayoutPanel2.Controls.Add(Actions(Theme.Button("听发音", delegate
+                table.Controls.Add(Actions(markH, markK), 0, row++);
+                table.Controls.Add(Actions(Theme.Button("听发音", delegate
                 {
                     Speak(x);
-                }, false), mark), 0, 4);
-                form2.Controls.Add(tableLayoutPanel2);
+                }, false)), 0, row++);
+                form2.Controls.Add(table);
                 using (Graphics graphics = form2.CreateGraphics())
                 {
                     float num2 = graphics.DpiX / 96f;
@@ -958,6 +1096,11 @@ namespace KanaSmallSteps
                 form2.ShowDialog(this);
             }
             Render();
+        }
+
+        private string MarkText(Kana y, string label)
+        {
+            return State.Learned.Contains(y.K) ? "✓ " + label + "已熟悉" : "标记" + label + "熟悉";
         }
 
         private void Speak(Kana x)

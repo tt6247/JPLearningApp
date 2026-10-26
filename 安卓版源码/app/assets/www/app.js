@@ -70,7 +70,7 @@
   }
 
   // ---------- 状态 ----------
-  var page = 'today', category = 'basic', tableMode = 'table', scope = 'basic';
+  var page = 'today', category = 'basic', tableMode = 'table', scope = 'basic', quizMode = 'read';
   var deck = [], deckShuffled = false, cardIndex = 0, flipped = false, quiz = null, sheetKana = null;
   var view = document.getElementById('view');
   function $(id) { return document.getElementById(id); }
@@ -122,7 +122,7 @@
   // ---------- 导航 ----------
   function navigate(p) {
     if (p === 'cards' && page !== 'cards') resetDeck();
-    if (p === 'quiz') quiz = new C.Quiz(scope, progress);
+    if (p === 'quiz') quiz = newQuiz(scope);
     page = p;
     render();
     window.scrollTo(0, 0);
@@ -190,11 +190,12 @@
   }
 
   function runTask(t) {
+    if (t.action === 'reviewQuiz' || t.action === 'quiz' || t.action === 'allQuiz') quizMode = 'read';
     if (t.action === 'reviewQuiz') startQuiz('errors');
     else if (t.action === 'warmup') startCards('learned');
     else if (t.action === 'learnGroup') startCards(t.scope);
     else if (t.action === 'quiz') startQuiz(t.scope);
-    else if (t.action === 'allQuiz') startQuiz('all');
+    else if (t.action === 'allQuiz') startQuiz('mix');
     else if (t.action === 'startTimer') startGoalTimer();
   }
 
@@ -282,6 +283,23 @@
   }
 
   // ---------- 五十音表 / 分组学习 ----------
+  // 五十音表的字形切换（2.5.0）：平假名 / 片假名 / 平片对照，选择记在进度里
+  function scriptTabs() {
+    return '<div class="seg script" role="tablist" aria-label="字形">' + [['hira', '平假名'], ['kata', '片假名'], ['both', '平片对照']].map(function (c) {
+      var on = progress.script === c[0];
+      return '<button data-script="' + c[0] + '" role="tab" aria-selected="' + on + '" class="' + (on ? 'active' : '') + '">' + c[1] + '</button>';
+    }).join('') + '</div>';
+  }
+  /** 当前字形下某类别的范围；对照模式下以平假名为准。 */
+  function catScope(cat) { return C.typeFor(cat, progress.script === 'kata' ? 'kata' : 'hira'); }
+
+  function pairCell(x, combo) {
+    var k = C.ByKana[x.pair];
+    return '<button class="kcell pair' + (combo ? ' combo' : '') + '" data-kana="' + x.K + '" aria-label="' + x.K + ' ' + k.K + ' ' + x.R + '">' +
+      '<span class="pairk" lang="ja"><span class="' + (progress.learned.has(x.K) ? 'done' : '') + '">' + x.K + '</span>' +
+      '<span class="kk' + (progress.learned.has(k.K) ? ' done' : '') + '">' + k.K + '</span></span><small>' + x.R + '</small></button>';
+  }
+
   function categoryTabs() {
     return '<div class="seg">' + [['basic', '清音 · 46'], ['voiced', '浊音 · 25'], ['combo', '拗音 · 33']].map(function (c) {
       return '<button data-cat="' + c[0] + '" class="' + (category === c[0] ? 'active' : '') + '">' + c[1] + '</button>';
@@ -289,11 +307,16 @@
   }
 
   function renderTable() {
-    var gs = C.Groups.filter(function (g) { return g.type === category; });
-    var html = heading(tableMode === 'table' ? '从「あ」开始，读懂日语。' : '一次一行，稳稳记住。',
-      tableMode === 'table' ? '点开一个假名，看读音、听发音，再标记熟悉。今天先学一行就好。' : '推荐顺序：元音 → 其他清音 → 浊音 / 半浊音 → 拗音。选一组开始翻卡。');
+    var sc = progress.script, both = sc === 'both';
+    var gs = C.Groups.filter(function (g) { return g.type === catScope(category); });
+    var title = tableMode === 'groups' ? '一次一行，稳稳记住。' : sc === 'kata' ? '从「ア」开始，认识片假名。' : both ? '一张表，两种写法。' : '从「あ」开始，读懂日语。';
+    var sub = tableMode === 'groups' ? '推荐顺序：先学完平假名（元音 → 清音 → 浊音 / 半浊音 → 拗音），再按同样的顺序学片假名。' :
+      sc === 'kata' ? '片假名和平假名读音完全相同，多用于外来语和拟声词。熟悉状态与平假名分开记。' :
+        both ? '左边平假名，右边片假名；下划线表示这种写法已熟悉。点开格子可以分别标记。' : '点开一个假名，看读音、听发音，再标记熟悉。今天先学一行就好。';
+    var html = heading(title, sub);
     html += '<div class="seg"><button data-mode="table" class="' + (tableMode === 'table' ? 'active' : '') + '">五十音表</button>' +
       '<button data-mode="groups" class="' + (tableMode === 'groups' ? 'active' : '') + '">分组学习</button></div>';
+    html += scriptTabs();
     html += categoryTabs();
     if (tableMode === 'table') {
       var cols = category === 'combo' ? 3 : 5;
@@ -306,18 +329,22 @@
         for (var c = 0; c < cols; c++) cells.push(null);
         g.items.forEach(function (x) { cells[x.column] = x; });
         cells.forEach(function (x) {
+          if (x && both) { html += pairCell(x, cols === 3); return; }
           html += x ? '<button class="kcell' + (progress.learned.has(x.K) ? ' learned' : '') + (cols === 3 ? ' combo' : '') + '" data-kana="' + x.K + '" aria-label="' + x.K + ' ' + x.R + '">' +
             '<span class="kana" lang="ja">' + x.K + '</span><small>' + x.R + '</small></button>' : '<span class="empty">·</span>';
         });
       });
-      html += '</div></div><div class="btns"><button class="btn primary block" data-act="learn-category">学习当前范围 →</button></div>';
-      html += '<div class="notice">' + (category === 'basic' ? '「五十音」是表格名称；现代常用清音共 46 个。绿色 ✓ 表示已熟悉。' :
+      html += '</div></div><div class="btns' + (both ? ' even' : '') + '">' + (both ?
+        '<button class="btn" data-act="learn-category" data-script-target="hira">学平假名 →</button><button class="btn primary" data-act="learn-category" data-script-target="kata">学片假名 →</button>' :
+        '<button class="btn primary block" data-act="learn-category">学习当前范围 →</button>') + '</div>';
+      html += '<div class="notice">' + (category === 'basic' ? '「五十音」是表格名称；现代常用清音共 46 个。' + (both ? '' : '绿色 ✓ 表示已熟悉。') + (sc !== 'hira' ? '注意形近的 シ / ツ、ソ / ン。' : '') :
         category === 'voiced' ? '「゛」是浊点，「゜」是半浊点。じ/ぢ、ず/づ 通常同音，之后在词语中区别写法。' :
           '小写的ゃ・ゅ・ょ与前字合成一拍；きゃ（kya）和 きや（ki-ya）不同。') + '</div>';
     } else {
-      html += '<div class="groups">' + gs.map(function (g) {
+      var list = both ? gs.concat(C.Groups.filter(function (g) { return g.type === C.typeFor(category, 'kata'); })) : gs;
+      html += '<div class="groups">' + list.map(function (g) {
         var known = g.items.filter(function (x) { return progress.learned.has(x.K); }).length;
-        return '<button class="group" data-group="' + g.id + '"><h3>' + g.name + '</h3><div class="chars" lang="ja">' +
+        return '<button class="group" data-group="' + g.id + '"><h3>' + (both ? (g.script === 'kata' ? '片假名 · ' : '平假名 · ') + g.name : g.name) + '</h3><div class="chars" lang="ja">' +
           g.items.map(function (x) { return x.K; }).join(' ') + '</div><div class="bar"><i style="width:' + pct(known, g.items.length) + '%"></i></div>' +
           '<small class="hint">' + known + ' / ' + g.items.length + ' 已熟悉</small></button>';
       }).join('') + '</div>';
@@ -327,17 +354,23 @@
 
   // ---------- 学习范围 ----------
   function scopeSelect() {
-    var opts = [['basic', '全部清音（46）'], ['voiced', '浊音 / 半浊音（25）'], ['combo', '常用拗音（33）'], ['all', '全部假名（104）'], ['errors', '待复习错题'], ['learned', '已熟悉假名（巩固）']];
-    return '<select id="scope" aria-label="学习范围"><optgroup label="完整范围">' + opts.map(function (o) {
-      return '<option value="' + o[0] + '"' + (scope === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
-    }).join('') + '</optgroup><optgroup label="按行学习">' + C.Groups.map(function (g) {
-      return '<option value="' + g.id + '"' + (scope === g.id ? ' selected' : '') + '>' + g.name + ' · ' + g.items.map(function (x) { return x.K; }).join('') + '</option>';
-    }).join('') + '</optgroup></select>';
+    function opt(o) { return '<option value="' + o[0] + '"' + (scope === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }
+    function rows(script) {
+      return C.Groups.filter(function (g) { return g.script === script; }).map(function (g) {
+        return opt([g.id, g.name + ' · ' + g.items.map(function (x) { return x.K; }).join('')]);
+      }).join('');
+    }
+    return '<select id="scope" aria-label="学习范围">' +
+      '<optgroup label="平假名">' + [['basic', '平假名 · 清音（46）'], ['voiced', '平假名 · 浊音 / 半浊音（25）'], ['combo', '平假名 · 拗音（33）'], ['all', '全部平假名（104）']].map(opt).join('') + '</optgroup>' +
+      '<optgroup label="片假名">' + [['kbasic', '片假名 · 清音（46）'], ['kvoiced', '片假名 · 浊音 / 半浊音（25）'], ['kcombo', '片假名 · 拗音（33）'], ['kall', '全部片假名（104）']].map(opt).join('') + '</optgroup>' +
+      '<optgroup label="综合">' + [['mix', '平片混合（208）'], ['errors', '待复习错题'], ['learned', '已熟悉假名（巩固）']].map(opt).join('') + '</optgroup>' +
+      '<optgroup label="平假名 · 按行">' + rows('hira') + '</optgroup><optgroup label="片假名 · 按行">' + rows('kata') + '</optgroup></select>';
   }
 
   function resetDeck() { deck = C.deck(scope, progress, deckShuffled); cardIndex = 0; flipped = false; lastStrokeKana = null; }
   function startCards(s) { scope = s; resetDeck(); page = 'cards'; render(); window.scrollTo(0, 0); }
-  function startQuiz(s) { scope = s; quiz = new C.Quiz(s, progress); page = 'quiz'; render(); window.scrollTo(0, 0); }
+  function newQuiz(s) { return new C.Quiz(s, progress, null, quizMode); }
+  function startQuiz(s) { scope = s; quiz = newQuiz(s); page = 'quiz'; render(); window.scrollTo(0, 0); }
   function moveCard(n) { if (!deck.length) return; cardIndex = (cardIndex + n + deck.length) % deck.length; flipped = false; render(); }
 
   // ---------- 记忆卡 ----------
@@ -352,7 +385,7 @@
     html += '<div class="row hint"><span>记忆卡 · ' + (deckShuffled ? '已打乱' : '五十音顺序') + '</span><span>' + (cardIndex + 1) + ' / ' + deck.length + '</span></div>' +
       '<div class="bar" style="margin:6px 0 14px"><i style="width:' + ((cardIndex + 1) / deck.length * 100) + '%"></i></div>' +
       '<button class="flash" data-act="flip" aria-label="' + (flipped ? '隐藏答案' : '翻开答案') + '"><div class="big" lang="ja">' + x.K + '</div>' +
-      '<div class="answer">' + (flipped ? x.R : '· · ·') + '</div><div class="hint">' + (flipped ? '再点一次可隐藏答案' : '点击卡片，核对读音') + '</div></button>' +
+      '<div class="answer">' + (flipped ? x.R : '· · ·') + '</div><div class="hint">' + (flipped ? (x.script === 'kata' ? '平假名写作 ' : '片假名写作 ') + kanaSpan(x.pair) + ' · 再点一次可隐藏答案' : '点击卡片，核对读音') + '</div></button>' +
       '<div class="btns even"><button class="btn outline" data-act="listen-card">听发音</button><button class="btn outline" data-act="prev">上一张</button><button class="btn outline" data-act="next">下一张</button></div>';
     if (flipped) html += '<div class="btns even"><button class="btn" data-act="again">还不熟，再练练</button><button class="btn primary" data-act="know">我记住了 ✓</button></div>';
     if (Strokes.has(x.K)) {
@@ -473,8 +506,12 @@
 
   // ---------- 辨认测验 ----------
   function renderQuiz() {
-    if (!quiz) quiz = new C.Quiz(scope, progress);
-    var q = quiz, html = heading('这个假名，怎么读？', '选择正确的罗马音。答题后可以听发音；错题会自动进入复习。');
+    if (!quiz) quiz = newQuiz(scope);
+    var q = quiz, pairMode = q.mode === 'pair';
+    var html = pairMode ? heading('平假名和片假名，配成一对。', '看一种写法，选出另一种写法。成绩记在片假名上，答错的会进入复习。') :
+      heading('这个假名，怎么读？', '选择正确的罗马音。答题后可以听发音；错题会自动进入复习。');
+    html += '<div class="seg" role="tablist" aria-label="题型"><button data-quiz-mode="read" class="' + (pairMode ? '' : 'active') + '">看字选读音</button>' +
+      '<button data-quiz-mode="pair" class="' + (pairMode ? 'active' : '') + '">平片配对</button></div>';
     html += '<div class="row" style="margin-bottom:12px">' + scopeSelect() + '<button class="btn" data-act="restart-quiz">重来</button></div>';
     if (!q.items.length) {
       html += '<div class="card empty-state"><strong>' + (scope === 'learned' ? '还没有已熟悉的假名' : '当前没有待复习的错题') + '</strong>' +
@@ -484,15 +521,18 @@
         (q.score === q.items.length ? '全部答对！明天再复习一次，让记忆更牢。' : '答错的假名已经加入复习，再见几次就会更熟悉。') +
         '<div class="btns even"><button class="btn primary" data-act="restart-quiz">再测一轮</button><button class="btn" data-page="errors">去错题复习</button></div></div>';
     } else {
-      var x = q.current();
-      html += '<div class="row hint"><span>假名 → 读音</span><span>' + (q.index + 1) + ' / ' + q.items.length + '</span></div>' +
+      var x = q.current(), want = q.expected(), tgt = q.target();
+      var dir = pairMode ? (x.script === 'hira' ? '平假名 → 片假名' : '片假名 → 平假名') : '假名 → 读音';
+      var other = x.script === 'hira' ? '片假名' : '平假名';
+      html += '<div class="row hint"><span>' + dir + '</span><span>' + (q.index + 1) + ' / ' + q.items.length + '</span></div>' +
         '<div class="bar" style="margin:6px 0 4px"><i style="width:' + (q.index / q.items.length * 100) + '%"></i></div>' +
-        '<div class="center big" lang="ja">' + x.K + '</div><div class="choices">' + q.options.map(function (r) {
-          var cls = q.submitted ? (r === x.R ? ' correct' : r === q.selected ? ' wrong' : '') : '';
-          return '<button class="choice' + cls + '" data-answer="' + r + '"' + (q.submitted ? ' disabled' : '') + '>' + r + '</button>';
-        }).join('') + '</div><div class="feedback" role="status">' + (q.submitted ? (q.selected === x.R ?
-          '✓ 答对了！' + (progress.errors[x.K] ? '还需再答对一次才能移出错题。' : '') :
-          '再记一次：' + kanaSpan(x.K) + ' 的读音是 <b>' + x.R + '</b>。已加入错题。') : '先凭记忆作答。') + '</div>';
+        '<div class="center big" lang="ja">' + x.K + '</div><div class="choices' + (pairMode ? ' kana-choices' : '') + '">' + q.options.map(function (r) {
+          var cls = q.submitted ? (r === want ? ' correct' : r === q.selected ? ' wrong' : '') : '';
+          return '<button class="choice' + cls + '" data-answer="' + r + '"' + (pairMode ? ' lang="ja"' : '') + (q.submitted ? ' disabled' : '') + '>' + r + '</button>';
+        }).join('') + '</div><div class="feedback" role="status">' + (q.submitted ? (q.lastRight() ?
+          '✓ 答对了！' + (pairMode ? kanaSpan(x.K) + ' ↔ ' + kanaSpan(want) + '（' + x.R + '）。' : '') + (progress.errors[tgt.K] ? '还需再答对一次才能移出错题。' : '') :
+          (pairMode ? '再记一次：' + kanaSpan(x.K) + ' 的' + other + '是 ' + kanaSpan(want) + '（' + x.R + '）。' + kanaSpan(tgt.K) + ' 已加入错题。' :
+            '再记一次：' + kanaSpan(x.K) + ' 的读音是 <b>' + x.R + '</b>。已加入错题。')) : '先凭记忆作答。') + '</div>';
       if (q.submitted) html += '<div class="btns even"><button class="btn outline" data-act="listen-quiz">听发音</button><button class="btn primary" data-act="next-question">' +
         (q.index + 1 === q.items.length ? '查看结果' : '下一题 →') + '</button></div>';
     }
@@ -509,7 +549,7 @@
     } else {
       html += '<div class="btns even"><button class="btn" data-act="review-cards">先看记忆卡</button><button class="btn primary" data-act="review-quiz">开始错题测验 →</button></div>' +
         '<div class="errgrid">' + es.map(function (x) {
-          return '<button class="erritem" data-kana="' + x.K + '"><b lang="ja">' + x.K + '</b>' + x.R + '<small>还需答对 ' + progress.errors[x.K] + ' 次</small></button>';
+          return '<button class="erritem" data-kana="' + x.K + '"><b lang="ja">' + x.K + '</b>' + x.R + (x.script === 'kata' ? ' · 片' : '') + '<small>还需答对 ' + progress.errors[x.K] + ' 次</small></button>';
         }).join('') + '</div>';
     }
     html += '</div><div class="notice">仅翻卡或标记熟悉不会清除错题；需要通过测验答对。</div>';
@@ -527,8 +567,10 @@
       '<div class="card"><h2 style="margin-top:0">外观与护眼</h2><p>右上角 ◐ 可切换「亮色护眼」「深色护眼」或「跟随系统」。两套配色都用暖色纸张底，不用纯白纯黑，正文对比度适中；长时间学习时，也建议每 20 分钟看看远处，让眼睛休息一下。</p>' +
       '<p class="small">当前：' + THEME_INFO[progress.theme].name + (progress.theme === 'system' ? '（' + (systemDark ? '深色' : '亮色') + '）' : '') + '</p><button class="btn" data-act="theme">更改外观</button></div>' +
       '<div class="card"><h2 style="margin-top:0">认读时要注意</h2><p>罗马音是临时提示，不是中文拼音。し读 shi、ち读 chi、つ读 tsu、ふ读 fu；ら行不等于英语 r。を通常读 o；は、へ作助词时读 wa、e。</p>' +
-      '<p>先学 46 个清音，再学浊音、半浊音和常用拗音。之后还要学习片假名、词汇与语法，才能逐步阅读喜欢的故事。</p></div>' +
-      '<div class="card"><h2 style="margin-top:0">使用与进度</h2><p>104 个发音片段内置在应用中，无需联网。进度自动保存在本机，卸载应用会删除进度。手机版与电脑版的进度各自独立。</p>' +
+      '<p>先学 46 个清音，再学浊音、半浊音和常用拗音。平假名都熟悉后，「今日」会接着推荐片假名；之后还要学习词汇与语法，才能逐步阅读喜欢的故事。</p></div>' +
+      '<div class="card"><h2 style="margin-top:0">片假名</h2><p>片假名和平假名读音完全相同，多用于外来语（コーヒー 咖啡）、拟声词和强调。五十音表顶部可以切换「平假名 / 片假名 / 平片对照」；两种写法的熟悉状态分开记。</p>' +
+      '<p>测验里的「平片配对」会给出一种写法，让你选出另一种写法，专门练两者的对应。注意形近的 シ / ツ、ソ / ン。</p></div>' +
+      '<div class="card"><h2 style="margin-top:0">使用与进度</h2><p>104 个发音片段内置在应用中（片假名与平假名共用），无需联网。进度自动保存在本机，卸载应用会删除进度。手机版与电脑版的进度各自独立。</p>' +
       '<p class="small">版本 ' + C.VERSION + (call('dataPath') ? ' · 进度文件：' + call('dataPath') : '') + '</p></div>' +
       '<div class="card"><h2 style="margin-top:0">录音来源与授权</h2><p class="small">录音：FUN Japanese Learning（https://funjapaneselearning.com）。<br>数据集整理：Arsalan Anwari，Kana Sounds。<br>https://huggingface.co/datasets/arsalan-anwari/kana-sounds<br>' +
       '授权：Creative Commons Attribution 4.0（CC BY 4.0）。<br>https://creativecommons.org/licenses/by/4.0/<br>录音按原样内置；调整了文件标识以匹配本应用的罗马音显示。</p></div>' +
@@ -547,13 +589,25 @@
     $('backdrop').classList.add('hidden');
     sheetKana = null;
   }
+  // 详情面板同时展示两种写法，可以分别标记熟悉（2.5.0）
   function showKana(k) {
     var x = C.ByKana[k];
     if (!x) return;
     sheetKana = k;
-    openSheet('<div class="hint">' + C.groupById(x.group).name + '</div><div class="big" lang="ja">' + x.K + '</div><div class="answer">' + x.R + '</div>' +
-      '<p class="hint" style="margin:6px 0 16px">' + C.note(x) + '</p><div class="btns even"><button class="btn" data-act="listen-sheet">听发音</button>' +
-      '<button class="btn primary" data-act="mark-sheet">' + (progress.learned.has(k) ? '取消熟悉标记' : '标记为已熟悉 ✓') + '</button></div>');
+    var h = x.script === 'hira' ? x : C.ByKana[x.pair], kt = C.ByKana[h.pair];
+    var hint = C.note(x), extra = x.script === 'hira' ? C.kataHint(x) : '';
+    function glyph(y, label) {
+      return '<div class="pg' + (y === x ? ' on' : '') + '"><div class="big' + (y.script === 'kata' ? ' kk' : '') + '" lang="ja">' + y.K + '</div><small>' + label + (progress.learned.has(y.K) ? ' · 已熟悉' : '') + '</small></div>';
+    }
+    function mark(y, label) {
+      var on = progress.learned.has(y.K);
+      return '<button class="btn' + (on ? ' known' : '') + '" data-mark="' + y.K + '">' + (on ? '✓ ' + label + '已熟悉' : '标记' + label + '熟悉') + '</button>';
+    }
+    openSheet('<div class="hint">' + C.groupLabel(C.groupById(x.group)) + '</div><div class="pairbig">' + glyph(h, '平假名') + glyph(kt, '片假名') + '</div>' +
+      '<div class="answer">' + x.R + '</div><p class="hint" style="margin:6px 0 ' + (extra ? '6px' : '14px') + '">' + hint + '</p>' +
+      (extra ? '<p class="hint tip">' + extra + '</p>' : '') +
+      '<div class="btns even">' + mark(h, '平假名') + mark(kt, '片假名') + '</div>' +
+      '<button class="btn outline block" data-act="listen-sheet">听发音</button>');
   }
 
   // ---------- 事件 ----------
@@ -568,16 +622,24 @@
     if (d.themeMode) { setTheme(d.themeMode); return; }
     if (d.step !== undefined && deck[cardIndex]) { Strokes.pin(deck[cardIndex].K, Number(d.step)); return; }
     if (d.cat) { category = d.cat; render(); return; }
+    if (d.script) { progress.script = d.script; save(); render(); return; }
+    if (d.quizMode) { if (quizMode !== d.quizMode) { quizMode = d.quizMode; quiz = newQuiz(scope); render(); } return; }
+    if (d.mark) { var mk = sheetKana; progress.toggleLearned(C.ByKana[d.mark]); save(); render(); showKana(mk); return; }
     if (d.mode) { tableMode = d.mode; render(); return; }
     if (d.kana) { showKana(d.kana); return; }
     if (d.group) { startCards(d.group); return; }
     if (d.answer) {
       if (quiz && quiz.answer(d.answer)) {
-        vibrate(quiz.selected === quiz.current().R ? 15 : 60);
+        vibrate(quiz.lastRight() ? 15 : 60);
         save(); render();
         // 屏幕较矮或字号较大时，「听发音 / 下一题」可能落在底部标签栏后面：答题后把它滚到可见处
+        // （不用 scrollIntoView：部分 WebView 在元素已部分可见时不会滚动，这里直接算出要滚多少）
         var nextBtn = view.querySelector('[data-act="next-question"]');
-        if (nextBtn && nextBtn.parentNode.scrollIntoView) nextBtn.parentNode.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        if (nextBtn) {
+          var tabTop = document.getElementById('tabbar').getBoundingClientRect().top;
+          var need = nextBtn.getBoundingClientRect().bottom - (tabTop - 12);
+          if (need > 0) window.scrollBy({ top: need, behavior: 'smooth' });
+        }
       }
       return;
     }
@@ -586,7 +648,7 @@
       case 'timer-toggle': toggleTimer(); break;
       case 'timer-add': addFive(); break;
       case 'timer-reset': resetTimer(); break;
-      case 'learn-category': startCards(category); break;
+      case 'learn-category': startCards(d.scriptTarget ? C.typeFor(category, d.scriptTarget) : catScope(category)); break;
       case 'shuffle': deckShuffled = !deckShuffled; resetDeck(); render(); break;
       case 'flip': flipped = !flipped; render(); break;
       case 'prev': moveCard(-1); break;
@@ -596,15 +658,12 @@
       case 'again': if (x) { progress.cardAgain(x); save(); moveCard(1); toast('已加入错题，之后再来复习。'); } break;
       case 'quiz-scope': startQuiz(scope); break;
       case 'restart-quiz': startQuiz(scope); break;
-      case 'basic-quiz': startQuiz('basic'); break;
+      case 'basic-quiz': quizMode = 'read'; startQuiz('basic'); break;
       case 'next-question': if (quiz && quiz.submitted) { quiz.next(); render(); window.scrollTo(0, 0); } break;
       case 'listen-quiz': if (quiz && quiz.current()) speak(quiz.current()); break;
       case 'review-cards': startCards('errors'); break;
       case 'review-quiz': startQuiz('errors'); break;
       case 'listen-sheet': if (sheetKana) speak(C.ByKana[sheetKana]); break;
-      case 'mark-sheet':
-        if (sheetKana) { var k = sheetKana; progress.toggleLearned(C.ByKana[k]); save(); render(); showKana(k); }
-        break;
       case 'close-sheet': closeSheet(); break;
       case 'theme': openThemeSheet(); break;
       case 'stroke-replay': if (x) Strokes.play(x.K); break;

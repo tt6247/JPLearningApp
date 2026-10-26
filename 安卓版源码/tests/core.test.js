@@ -9,7 +9,7 @@ function at(y, m, d, h) { return function () { return new Date(y, m - 1, d, h ||
 
 section('104 kana; 46/25/33 group counts; sparse chart positions; card deck in chart order', function () {
   var p = new C.Progress();
-  check(C.All.length === 104 && Object.keys(C.ByKana).length === 104, 'unique kana');
+  check(C.pool('all', p).length === 104 && C.pool('all', p).every(function (x) { return x.script === 'hira'; }), 'hiragana kana');
   check(C.pool('basic', p).length === 46 && C.pool('voiced', p).length === 25 && C.pool('combo', p).length === 33, 'groups');
   check(C.ByKana['を'].column === 4 && C.ByKana['や'].column === 0 && C.ByKana['ゆ'].column === 2 && C.ByKana['よ'].column === 4, 'chart spacing');
   check(C.deck('basic', p, false).slice(0, 12).map(function (x) { return x.K; }).join('') === 'あいうえおかきくけこさし', 'card deck follows chart order');
@@ -135,6 +135,7 @@ section('timer tick; pause; add time; sleep clamp; finish; restart; reset; limit
 section('all 104 recordings bundled and mapped', function () {
   var keys = C.All.map(C.audioKey);
   check(new Set(keys).size === 104, 'audio mapping');
+  C.All.forEach(function (x) { check(C.audioKey(x) === C.audioKey(C.ByKana[x.pair]), 'katakana shares recording ' + x.K); });
   var dir = path.join(__dirname, '..', 'app', 'assets', 'www', 'audio');
   keys.forEach(function (k) {
     var f = path.join(dir, k + '.mp3');
@@ -142,7 +143,7 @@ section('all 104 recordings bundled and mapped', function () {
   });
 });
 
-section('stroke data for all 104 kana; textbook stroke counts (2.3.0)', function () {
+section('stroke data for all 208 kana; textbook stroke counts', function () {
   var vm = require('vm'), ctx = { window: {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'assets', 'www', 'data', 'kana-strokes.js'), 'utf8'), ctx);
   var S = ctx.window.KANA_STROKES;
@@ -150,10 +151,61 @@ section('stroke data for all 104 kana; textbook stroke counts (2.3.0)', function
   C.All.forEach(function (k) {
     k.K.split('').forEach(function (c) { check(S[c] && S[c].length > 0 && S[c].every(function (d) { return /^M[-\d.,c\s]+$/.test(d); }), 'strokes ' + c); });
   });
-  var expected = { 'あ': 3, 'い': 2, 'き': 4, 'さ': 3, 'ふ': 4, 'を': 3, 'ん': 1, 'ぱ': 4, 'きゃ': 7, 'びょ': 5 };
+  var expected = { 'あ': 3, 'い': 2, 'き': 4, 'さ': 3, 'ふ': 4, 'を': 3, 'ん': 1, 'ぱ': 4, 'きゃ': 7, 'びょ': 5,
+    'ア': 2, 'シ': 3, 'ツ': 3, 'ソ': 2, 'ン': 2, 'ネ': 4, 'ホ': 4, 'ヲ': 3, 'パ': 3, 'キャ': 5 };
   Object.keys(expected).forEach(function (k) { check(count(k) === expected[k], 'stroke count ' + k); });
   var font = path.join(__dirname, '..', 'app', 'assets', 'www', 'fonts', 'KleeOne-SemiBold-kana.ttf');
   check(fs.existsSync(font) && fs.statSync(font).size > 30000, 'kana font bundled');
+});
+
+section('katakana (2.5.0): 208 kana; mirrored groups; separate progress; pairing quiz; plan continues into katakana', function () {
+  var p = new C.Progress();
+  check(C.All.length === 208 && Object.keys(C.ByKana).length === 208, 'unique kana incl. katakana');
+  check(C.pool('kbasic', p).length === 46 && C.pool('kvoiced', p).length === 25 && C.pool('kcombo', p).length === 33 && C.pool('kall', p).length === 104 && C.pool('mix', p).length === 208, 'katakana groups');
+  check(C.deck('kbasic', p, false).slice(0, 12).map(function (x) { return x.K; }).join('') === 'アイウエオカキクケコサシ', 'katakana deck in chart order');
+  C.All.forEach(function (x) {
+    var y = C.ByKana[x.pair];
+    check(y && y.pair === x.K && y.R === x.R && y.column === x.column && y.script !== x.script && C.baseType(y) === C.baseType(x), 'pair ' + x.K);
+  });
+  check(C.toKata('きゃ') === 'キャ' && C.toHira('ヲ') === 'を' && C.groupLabel(C.groupById('Ka')) === '片假名 · 元音' && C.groupById('Kky').name === 'キャ组', 'names');
+  // 熟悉状态各自记录，并能存取
+  p.cardKnown(C.ByKana['ア']);
+  check(p.learned.has('ア') && !p.learned.has('あ'), 'separate learned');
+  p.script = 'both';
+  var r = C.Progress.fromJSON(JSON.parse(JSON.stringify(p.toJSON())));
+  check(r.learned.has('ア') && r.script === 'both', 'katakana progress and script persist');
+  check(C.Progress.fromJSON({ script: 'x' }).script === 'hira' && C.Progress.fromJSON({}).script === 'hira', 'script default');
+  // 配对测验
+  ['basic', 'kbasic', 'mix', 'Kky', 'nn'].forEach(function (sc) {
+    for (var i = 0; i < 60; i++) {
+      var pp = new C.Progress(), q = new C.Quiz(sc, pp, null, 'pair');
+      while (!q.done()) {
+        var x = q.current(), want = q.expected();
+        check(want === x.pair, 'pair expected');
+        check(q.options.length === 4 && new Set(q.options).size === 4 && q.options.indexOf(want) >= 0, 'pair choices ' + sc);
+        check(q.options.every(function (o) { return C.ByKana[o] && C.ByKana[o].script !== x.script; }), 'pair choices use the other script');
+        var wrong = q.options.filter(function (o) { return o !== want; })[0], tgt = q.target();
+        check(tgt.script === 'kata', 'pair result goes to katakana');
+        q.answer(i % 2 ? want : wrong);
+        check(i % 2 ? pp.learned.has(tgt.K) : pp.errors[tgt.K] === 2, 'pair record');
+        check(!pp.errors[x.script === 'hira' ? x.K : x.pair], 'hiragana untouched by pairing');
+        q.next();
+      }
+    }
+  });
+  var rq = new C.Quiz('kbasic', new C.Progress());
+  check(rq.mode === 'read' && rq.options.indexOf(rq.current().R) >= 0, 'katakana reading quiz');
+  // 今日计划：平假名全部熟悉后接着推荐片假名
+  var pl = new C.Progress();
+  pl.clock = at(2026, 10, 26);
+  C.pool('all', pl).forEach(function (x) { pl.learned.add(x.K); });
+  check(C.DailyPlan.nextGroup(pl).id === 'Ka', 'next row after hiragana is katakana vowels');
+  var tasks = C.DailyPlan.build(pl);
+  check(tasks.some(function (t) { return t.action === 'learnGroup' && t.scope === 'Ka' && t.title.indexOf('片假名 · 元音') >= 0; }), 'plan suggests katakana');
+  check(C.DailyPlan.coach(pl).indexOf('片假名') >= 0, 'coach mentions katakana');
+  C.pool('kall', pl).forEach(function (x) { pl.learned.add(x.K); });
+  check(C.DailyPlan.nextGroup(pl) === null, 'all done');
+  check(C.note(C.ByKana['シ']).indexOf('ツ') >= 0 && C.kataHint(C.ByKana['か']).indexOf('カ') >= 0, 'katakana hints');
 });
 
 console.log(results.join('\n'));

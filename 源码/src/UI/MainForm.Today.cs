@@ -433,6 +433,7 @@ namespace KanaSmallSteps
             switch (t.Action)
             {
                 case PlanAction.ReviewQuiz:
+                    QuizMode = "read";
                     StartQuiz("errors");
                     break;
                 case PlanAction.Warmup:
@@ -442,10 +443,12 @@ namespace KanaSmallSteps
                     StartCards(t.Scope);
                     break;
                 case PlanAction.Quiz:
+                    QuizMode = "read";
                     StartQuiz(t.Scope);
                     break;
                 case PlanAction.AllQuiz:
-                    StartQuiz("all");
+                    QuizMode = "read";
+                    StartQuiz("mix");
                     break;
                 case PlanAction.StartTimer:
                     StartGoalTimer();

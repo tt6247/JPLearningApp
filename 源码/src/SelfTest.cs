@@ -143,6 +143,72 @@ namespace KanaSmallSteps
         }
 
                 /// <summary>2.3.0：笔顺数据完整、笔画数与课本一致、路径解析正确；假名字体可加载。</summary>
+        private static string KatakanaTests(string folder)
+        {
+            Progress p = new Progress(Path.Combine(folder, "kata-progress.xml"));
+            Check(Data.All.Count == 208 && Data.ByKana.Count == 208, "unique kana incl. katakana");
+            Check(Data.Pool("kbasic", p).Count == 46 && Data.Pool("kvoiced", p).Count == 25 && Data.Pool("kcombo", p).Count == 33 && Data.Pool("kall", p).Count == 104 && Data.Pool("mix", p).Count == 208, "katakana groups");
+            Check(string.Join("", Data.Deck("kbasic", p, false).Take(12).Select((Kana x) => x.K)) == "アイウエオカキクケコサシ", "katakana deck in chart order");
+            foreach (Kana x in Data.All)
+            {
+                Kana y = Data.ByKana[x.Pair];
+                Check(y.Pair == x.K && y.R == x.R && y.Column == x.Column && y.Script != x.Script && Data.BaseType(y) == Data.BaseType(x), "pair " + x.K);
+            }
+            Check(Data.ToKata("きゃ") == "キャ" && Data.ToHira("ヲ") == "を" && Data.GroupLabel(Data.GroupById("Ka")) == "片假名 · 元音" && Data.GroupById("Kky").Name == "キャ组", "names");
+            p.CardKnown(Data.ByKana["ア"]);
+            Check(p.Learned.Contains("ア") && !p.Learned.Contains("あ"), "separate learned");
+            p.Script = "both";
+            p.Save();
+            Progress r = Progress.Load(p.Path);
+            Check(r.Learned.Contains("ア") && r.Script == "both", "katakana progress and script persist");
+            string[] scopes = new string[] { "basic", "kbasic", "mix", "Kky", "nn" };
+            foreach (string sc in scopes)
+            {
+                for (int i = 0; i < 40; i++)
+                {
+                    Progress pp = new Progress(Path.Combine(folder, "pair.xml"));
+                    pp.Learned.Clear();
+                    pp.Errors.Clear();
+                    Quiz q = new Quiz(sc, pp, "pair");
+                    while (!q.Done)
+                    {
+                        Kana x = q.Current;
+                        string want = q.Expected;
+                        Check(want == x.Pair, "pair expected");
+                        Check(q.Options.Count == 4 && q.Options.Distinct().Count() == 4 && q.Options.Contains(want), "pair choices " + sc);
+                        Check(q.Options.All((string o) => Data.ByKana.ContainsKey(o) && Data.ByKana[o].Script != x.Script), "pair choices use the other script");
+                        Kana tgt = q.Target;
+                        Check(tgt.Script == "kata", "pair result goes to katakana");
+                        string wrong = q.Options.First((string o) => o != want);
+                        q.Answer(i % 2 == 1 ? want : wrong);
+                        Check(i % 2 == 1 ? pp.Learned.Contains(tgt.K) : pp.Errors[tgt.K] == 2, "pair record");
+                        Check(!pp.Errors.ContainsKey(x.Script == "hira" ? x.K : x.Pair), "hiragana untouched by pairing");
+                        q.Next();
+                    }
+                }
+            }
+            Quiz rq = new Quiz("kbasic", p);
+            Check(rq.Mode == "read" && rq.Options.Contains(rq.Current.R), "katakana reading quiz");
+            Progress pl = new Progress(Path.Combine(folder, "plan-kata.xml"));
+            pl.Learned.Clear();
+            pl.Errors.Clear();
+            pl.Clock = delegate { return new DateTime(2026, 10, 26, 9, 0, 0); };
+            foreach (Kana x in Data.Pool("all", pl))
+            {
+                pl.Learned.Add(x.K);
+            }
+            Check(DailyPlan.NextGroup(pl).Id == "Ka", "next row after hiragana is katakana vowels");
+            Check(DailyPlan.Build(pl).Any((PlanTask t) => t.Action == PlanAction.LearnGroup && t.Scope == "Ka" && t.Title.Contains("片假名 · 元音")), "plan suggests katakana");
+            Check(DailyPlan.Coach(pl).Contains("片假名"), "coach mentions katakana");
+            foreach (Kana x in Data.Pool("kall", pl))
+            {
+                pl.Learned.Add(x.K);
+            }
+            Check(DailyPlan.NextGroup(pl) == null, "all done");
+            Check(Data.Note(Data.ByKana["シ"]).Contains("ツ") && Data.KataHint(Data.ByKana["か"]).Contains("カ"), "katakana hints");
+            return "PASS: katakana (2.5.0): 208 kana; mirrored groups; separate progress; pairing quiz; plan continues into katakana.";
+        }
+
         private static string StrokeTests()
         {
             foreach (Kana k in Data.All)
@@ -157,7 +223,7 @@ namespace KanaSmallSteps
                     }
                 }
             }
-            string[] expected = new string[] { "あ3", "い2", "き4", "さ3", "ふ4", "を3", "ん1", "ぱ4", "きゃ7", "びょ5" };
+            string[] expected = new string[] { "あ3", "い2", "き4", "さ3", "ふ4", "を3", "ん1", "ぱ4", "きゃ7", "びょ5", "ア2", "シ3", "ツ3", "ソ2", "ン2", "ネ4", "ホ4", "ヲ3", "パ3", "キャ5" };
             foreach (string e in expected)
             {
                 string kana = e.Substring(0, e.Length - 1);
@@ -197,8 +263,8 @@ namespace KanaSmallSteps
                 Check(panel.StrokeCount == 7, "stroke panel");
             }
             return Environment.OSVersion.Platform == PlatformID.Win32NT
-                ? "PASS: stroke data for all 104 kana; textbook stroke counts; path parsing; partial strokes; combo layout; Klee One font loads and renders; stroke panel renders."
-                : "PASS: stroke data for all 104 kana; textbook stroke counts; path parsing; partial strokes; combo layout; Klee One font loads (glyph rendering check skipped: not Windows); stroke panel renders.";
+                ? "PASS: stroke data for all 208 kana; textbook stroke counts; path parsing; partial strokes; combo layout; Klee One font loads and renders; stroke panel renders."
+                : "PASS: stroke data for all 208 kana; textbook stroke counts; path parsing; partial strokes; combo layout; Klee One font loads (glyph rendering check skipped: not Windows); stroke panel renders.";
         }
 
                 private static bool[] Glyph(Font f)
@@ -258,7 +324,7 @@ namespace KanaSmallSteps
             try
             {
                 Progress progress = new Progress(Path.Combine(folder, "test-progress.xml"));
-                Check(Data.All.Count == 104 && Data.ByKana.Count == 104, "unique kana");
+                Check(Data.Pool("all", progress).Count == 104 && Data.Pool("all", progress).All((Kana x) => x.Script == "hira"), "hiragana kana");
                 Check(Data.Pool("basic", progress).Count == 46 && Data.Pool("voiced", progress).Count == 25 && Data.Pool("combo", progress).Count == 33, "groups");
                 Check(Data.ByKana["を"].Column == 4 && Data.ByKana["や"].Column == 0 && Data.ByKana["ゆ"].Column == 2 && Data.ByKana["よ"].Column == 4, "chart spacing");
                 Check(string.Join("", Data.Deck("basic", progress, false).Take(12).Select((Kana x) => x.K)) == "あいうえおかきくけこさし", "card deck follows chart order");
@@ -312,11 +378,16 @@ namespace KanaSmallSteps
                 list.Add(TimerTests());
                 list.Add(PlanCompletionTests(folder));
                 list.Add(StrokeTests());
+                list.Add(KatakanaTests(folder));
                 Check(Data.All.Select(OfflineAudio.Key).Distinct().Count() == 104, "audio mapping");
+                foreach (Kana kk in Data.All)
+                {
+                    Check(OfflineAudio.Key(kk) == OfflineAudio.Key(Data.ByKana[kk.Pair]), "katakana shares recording " + kk.K);
+                }
                 bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
                 using (OfflineAudio offlineAudio = new OfflineAudio(Path.Combine(folder, "audio")))
                 {
-                    foreach (Kana item in Data.All)
+                    foreach (Kana item in Data.All.Where((Kana x) => x.Script == "hira"))
                     {
                         Check(OfflineAudio.Bytes(item).Length > 1000, "embedded audio " + item.K);
                         if (windows)
@@ -345,7 +416,26 @@ namespace KanaSmallSteps
                     }
                     mainForm.UseTheme("light");
                 }
-                list.Add("PASS: all seven native Windows pages construct in light and dark eye-care themes.");
+                // 2.5.0：三种字形的五十音表 / 分组学习、平片配对测验、片假名记忆卡都能构建
+                foreach (string script in Progress.ScriptChoices)
+                {
+                    Progress sp = new Progress(progress.Path);
+                    sp.Script = script;
+                    sp.Learned.Add("ア");
+                    using (MainForm form = new MainForm(sp))
+                    {
+                        form.Navigate("table");
+                        form.Navigate("groups");
+                        Check(form.Controls.Count > 0, "script view " + script);
+                    }
+                }
+                using (MainForm form = new MainForm(new Progress(progress.Path)))
+                {
+                    form.Navigate("quiz");
+                    form.SetQuizMode("pair");
+                    form.Navigate("cards");
+                }
+                list.Add("PASS: all seven native Windows pages construct in light and dark eye-care themes; katakana chart, pairing quiz and cards construct.");
                 File.WriteAllLines(Path.Combine(folder, "result.txt"), list);
                 return 0;
             }

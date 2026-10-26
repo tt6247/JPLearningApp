@@ -68,6 +68,11 @@ namespace KanaSmallSteps
 
         public static readonly string[] ThemeChoices = new string[] { "system", "light", "dark" };
 
+        /// <summary>五十音表显示的字形：hira 平假名 / kata 片假名 / both 平片对照（2.5.0）。</summary>
+        public string Script = "hira";
+
+        public static readonly string[] ScriptChoices = new string[] { "hira", "kata", "both" };
+
         public readonly string Path;
 
         public string Warning = "";
@@ -151,6 +156,11 @@ namespace KanaSmallSteps
             {
                 Theme = theme;
             }
+            string script = (string)root.Attribute("script");
+            if (script != null && ScriptChoices.Contains(script))
+            {
+                Script = script;
+            }
             foreach (XElement item in root.Elements("kana"))
             {
                 string text = (string)item.Attribute("value");
@@ -200,7 +210,8 @@ namespace KanaSmallSteps
                     new XAttribute("correct", Correct),
                     new XAttribute("goal", Goal),
                     new XAttribute("timer", TimerMinutes),
-                    new XAttribute("theme", Theme));
+                    new XAttribute("theme", Theme),
+                    new XAttribute("script", Script));
                 foreach (Kana item in Data.All)
                 {
                     int review;

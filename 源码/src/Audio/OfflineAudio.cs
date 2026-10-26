@@ -24,6 +24,10 @@ namespace KanaSmallSteps
 
         public static string Key(Kana x)
         {
+            if (x.Script == "kata")
+            {
+                x = Data.ByKana[x.Pair]; // 片假名与平假名读音相同，共用录音
+            }
             string text = ((x.Type == "basic") ? "seion" : ((x.Type == "combo") ? "yoon" : ((x.Group == "p") ? "handakuon" : "dakuon")));
             string text2 = x.R;
             if (x.K == "ぢ")

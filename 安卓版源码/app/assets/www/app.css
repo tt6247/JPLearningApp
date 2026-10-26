@@ -7,7 +7,7 @@
   --ink: #3B362F; --muted: #6F6659;
   --accent: #5F57A8; --accent-soft: #E7E1F0; --on-accent: #FAF7F0;
   --green: #3E7A58; --green-bg: #E2ECDC; --ok-bg: #D6E8D1; --ok-fg: #2F6B4A; --bad-bg: #F3DDD3; --bad-fg: #9A4436;
-  --track: #E4DDCE; --part: #CEC6E6; --notice: #E9E3EE; --notice-fg: #5A5180;
+  --kata: #A2563F; --track: #E4DDCE; --part: #CEC6E6; --notice: #E9E3EE; --notice-fg: #5A5180;
   --top-bg: rgba(242, 237, 225, .94); --shadow: 0 1px 2px rgba(80, 60, 30, .06); --backdrop: rgba(40, 34, 26, .38);
   --top: 52px; --tab: 62px;
   color-scheme: light;
@@ -17,7 +17,7 @@
   --ink: #E3DCCF; --muted: #A2998B;
   --accent: #A99DDC; --accent-soft: #35314A; --on-accent: #1D1C1A;
   --green: #83BE9B; --green-bg: #25332B; --ok-bg: #243A2D; --ok-fg: #9DD4B1; --bad-bg: #40292A; --bad-fg: #E9A79B;
-  --track: #35322D; --part: #544C78; --notice: #2C2A36; --notice-fg: #C3BBE6;
+  --kata: #E4A48C; --track: #35322D; --part: #544C78; --notice: #2C2A36; --notice-fg: #C3BBE6;
   --top-bg: rgba(29, 28, 26, .94); --shadow: none; --backdrop: rgba(0, 0, 0, .55);
   color-scheme: dark;
 }
@@ -214,3 +214,18 @@ select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-ra
 
 /* 答题后自动滚到「下一题」时，避开底部标签栏 */
 .btns, .feedback { scroll-margin-bottom: calc(var(--tab) + 16px); }
+
+/* 片假名（2.5.0）：对照模式的双字格子、配对测验、详情面板 */
+.kcell.pair .pairk { display: flex; align-items: baseline; gap: 2px; line-height: 1.2; font-family: "KanaKlee", "Noto Sans CJK JP", sans-serif; }
+.kcell.pair .pairk span { font-size: min(19px, 4.9vw); position: relative; padding-bottom: 2px; }
+.kcell.pair.combo .pairk span { font-size: min(15px, 3.9vw); }
+.kcell.pair .pairk .kk, .big.kk { color: var(--kata); }
+.kcell.pair .pairk .done::after { content: ''; position: absolute; left: 18%; right: 18%; bottom: -1px; height: 2px; border-radius: 2px; background: var(--green); }
+.kana-choices .choice { font-size: 32px; font-family: "KanaKlee", "Noto Sans CJK JP", sans-serif; }
+.sheet .pairbig { display: flex; justify-content: center; gap: 28px; align-items: flex-end; }
+.sheet .pairbig .big { font-size: 76px; line-height: 1.2; }
+.sheet .pairbig small { display: block; font-size: 12px; color: var(--muted); }
+.sheet .pairbig .pg.on small { color: var(--ink); font-weight: 600; }
+.sheet .tip { background: var(--surface2); border-radius: 10px; padding: 8px 12px; margin: 0 0 14px; text-align: left; }
+.btn.known { background: var(--green-bg); border-color: var(--green-bg); color: var(--green); font-weight: 700; }
+.sheet .btn.block { margin-top: 8px; }
