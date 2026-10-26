@@ -169,9 +169,7 @@
       '<div class="bar"><i id="t-bar" style="width:0"></i></div>' +
       '<div class="presets">' + C.TIMER_CHOICES.map(function (m) { return '<button data-preset="' + m + '">' + m + ' 分钟</button>'; }).join('') + '</div>' +
       '<div class="btns even"><button class="btn primary" id="t-toggle" data-act="timer-toggle">开始专注</button><button class="btn" data-act="timer-add">+5 分钟</button><button class="btn" data-act="timer-reset">重置</button></div>' +
-      '<div class="goal"><label for="goal">每日目标</label><select id="goal">' + C.GOAL_CHOICES.map(function (g) {
-        return '<option value="' + g + '"' + (g === progress.goal ? ' selected' : '') + '>' + g + ' 分钟</option>';
-      }).join('') + '</select></div><div class="bar green"><i id="goal-fill" style="width:0"></i></div>' +
+      '<div class="goal"><span>每日目标</span><button class="picker-trigger" data-act="open-goal" aria-haspopup="dialog" aria-label="每日目标：' + progress.goal + ' 分钟"><span>' + progress.goal + ' 分钟</span></button></div><div class="bar green"><i id="goal-fill" style="width:0"></i></div>' +
       '<p class="hint" style="margin-top:10px">时长按计时器统计。切换页面计时不停；离开应用时，到点会发通知提醒。</p></section>';
 
     html += '<section class="card"><div class="row" style="margin-bottom:8px"><h2>近 7 天专注时长</h2></div><div class="week">' +
@@ -352,19 +350,32 @@
     view.innerHTML = html;
   }
 
-  // ---------- 学习范围 ----------
-  function scopeSelect() {
-    function opt(o) { return '<option value="' + o[0] + '"' + (scope === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }
+  // ---------- 学习范围（统一的底部选择面板，取代系统下拉框） ----------
+  function scopeGroups() {
     function rows(script) {
       return C.Groups.filter(function (g) { return g.script === script; }).map(function (g) {
-        return opt([g.id, g.name + ' · ' + g.items.map(function (x) { return x.K; }).join('')]);
-      }).join('');
+        return [g.id, g.name + '  ' + g.items.map(function (x) { return x.K; }).join('')];
+      });
     }
-    return '<select id="scope" aria-label="学习范围">' +
-      '<optgroup label="平假名">' + [['basic', '平假名 · 清音（46）'], ['voiced', '平假名 · 浊音 / 半浊音（25）'], ['combo', '平假名 · 拗音（33）'], ['all', '全部平假名（104）']].map(opt).join('') + '</optgroup>' +
-      '<optgroup label="片假名">' + [['kbasic', '片假名 · 清音（46）'], ['kvoiced', '片假名 · 浊音 / 半浊音（25）'], ['kcombo', '片假名 · 拗音（33）'], ['kall', '全部片假名（104）']].map(opt).join('') + '</optgroup>' +
-      '<optgroup label="综合">' + [['mix', '平片混合（208）'], ['errors', '待复习错题'], ['learned', '已熟悉假名（巩固）']].map(opt).join('') + '</optgroup>' +
-      '<optgroup label="平假名 · 按行">' + rows('hira') + '</optgroup><optgroup label="片假名 · 按行">' + rows('kata') + '</optgroup></select>';
+    return [
+      { title: '平假名', items: [['basic', '清音（46）'], ['voiced', '浊音 / 半浊音（25）'], ['combo', '拗音（33）'], ['all', '全部（104）']] },
+      { title: '片假名', items: [['kbasic', '清音（46）'], ['kvoiced', '浊音 / 半浊音（25）'], ['kcombo', '拗音（33）'], ['kall', '全部（104）']] },
+      { title: '综合', items: [['mix', '平片混合（208）'], ['errors', '待复习错题'], ['learned', '已熟悉假名（巩固）']] },
+      { title: '平假名 · 按行', items: rows('hira') },
+      { title: '片假名 · 按行', items: rows('kata') }
+    ];
+  }
+  // 「平假名 · 清音（46）」这样的完整名称：按行与综合分组本身已经说明了类别，不再重复前缀
+  function scopeOptionLabel(g, name) { return /按行|综合/.test(g.title) ? name : g.title + ' · ' + name; }
+  function scopeLabel() {
+    var out = '';
+    scopeGroups().forEach(function (g) {
+      g.items.forEach(function (o) { if (o[0] === scope) out = scopeOptionLabel(g, o[1]); });
+    });
+    return out || '选择学习范围';
+  }
+  function scopePicker() {
+    return '<button class="picker-trigger" data-act="open-scope" aria-haspopup="dialog" aria-label="学习范围：' + scopeLabel() + '"><span>' + scopeLabel() + '</span></button>';
   }
 
   function resetDeck() { deck = C.deck(scope, progress, deckShuffled); cardIndex = 0; flipped = false; lastStrokeKana = null; }
@@ -376,7 +387,7 @@
   // ---------- 记忆卡 ----------
   function renderCards() {
     var html = heading('先回想，再翻开答案。', '看着假名试着读出来。点卡片核对答案，再决定是否熟悉。');
-    html += '<div class="row" style="margin-bottom:12px">' + scopeSelect() + '<button class="btn" data-act="shuffle">' + (deckShuffled ? '按五十音顺序' : '打乱顺序') + '</button></div>';
+    html += '<div class="row" style="margin-bottom:12px">' + scopePicker() + '<button class="btn" data-act="shuffle">' + (deckShuffled ? '按五十音顺序' : '打乱顺序') + '</button></div>';
     if (!deck.length) {
       html += '<div class="card empty-state"><strong>' + (scope === 'learned' ? '还没有已熟悉的假名' : '当前范围没有可学习的假名') + '</strong>请切换学习范围。</div>';
       view.innerHTML = html; return;
@@ -512,7 +523,7 @@
       heading('这个假名，怎么读？', '选择正确的罗马音。答题后可以听发音；错题会自动进入复习。');
     html += '<div class="seg" role="tablist" aria-label="题型"><button data-quiz-mode="read" class="' + (pairMode ? '' : 'active') + '">看字选读音</button>' +
       '<button data-quiz-mode="pair" class="' + (pairMode ? 'active' : '') + '">平片配对</button></div>';
-    html += '<div class="row" style="margin-bottom:12px">' + scopeSelect() + '<button class="btn" data-act="restart-quiz">重来</button></div>';
+    html += '<div class="row" style="margin-bottom:12px">' + scopePicker() + '<button class="btn" data-act="restart-quiz">重来</button></div>';
     if (!q.items.length) {
       html += '<div class="card empty-state"><strong>' + (scope === 'learned' ? '还没有已熟悉的假名' : '当前没有待复习的错题') + '</strong>' +
         (scope === 'learned' ? '先用记忆卡学一行吧。' : '来一轮清音测验吧。') + '<div class="btns"><button class="btn primary block" data-act="basic-quiz">从清音开始测验</button></div></div>';
@@ -580,10 +591,38 @@
 
   // ---------- 假名详情（底部面板） ----------
   function openSheet(html) {
+    $('sheet').classList.remove('picker');
     $('sheet').innerHTML = html;
     $('sheet').classList.remove('hidden');
     $('backdrop').classList.remove('hidden');
   }
+  // 选择面板（学习范围、每日目标）：与外观面板同一套卡片样式，选中即生效并关闭
+  function openPicker(html) {
+    openSheet(html);
+    $('sheet').classList.add('picker');
+  }
+  function pickItem(on, value, label, attr) {
+    return '<button class="pk-item' + (on ? ' active' : '') + '" ' + attr + '="' + value + '" aria-pressed="' + on + '">' + label +
+      '<span class="pk-tick">' + (on ? '✓' : '') + '</span></button>';
+  }
+  function openScopeSheet() {
+    openPicker('<h2 class="pk-head">学习范围</h2><p class="hint pk-sub">选择要学习或测验的假名</p>' +
+      scopeGroups().map(function (g) {
+        return '<div class="pk-title">' + g.title + '</div><div class="pk-list">' + g.items.map(function (o) {
+          return pickItem(scope === o[0], o[0], o[1], 'data-scope-opt');
+        }).join('') + '</div>';
+      }).join(''));
+  }
+  function openGoalSheet() {
+    openPicker('<h2 class="pk-head">每日目标</h2><p class="hint pk-sub">每天专注学习的分钟数，进度条按此计算</p><div class="pk-list">' +
+      C.GOAL_CHOICES.map(function (g) { return pickItem(g === progress.goal, g, g + ' 分钟', 'data-goal-opt'); }).join('') + '</div>');
+  }
+  function setScope(s) {
+    closeSheet();
+    scope = s;
+    if (page === 'cards') { resetDeck(); render(); } else { startQuiz(s); }
+  }
+  function setGoal(g) { closeSheet(); progress.goal = g; save(); render(); }
   function closeSheet() {
     $('sheet').classList.add('hidden');
     $('backdrop').classList.add('hidden');
@@ -620,6 +659,8 @@
     if (d.task !== undefined) { runTask(window.__tasks[Number(d.task)]); return; }
     if (d.preset) { setPreset(Number(d.preset)); return; }
     if (d.themeMode) { setTheme(d.themeMode); return; }
+    if (d.scopeOpt) { setScope(d.scopeOpt); return; }
+    if (d.goalOpt) { setGoal(Number(d.goalOpt)); return; }
     if (d.step !== undefined && deck[cardIndex]) { Strokes.pin(deck[cardIndex].K, Number(d.step)); return; }
     if (d.cat) { category = d.cat; render(); return; }
     if (d.script) { progress.script = d.script; save(); render(); return; }
@@ -666,16 +707,9 @@
       case 'listen-sheet': if (sheetKana) speak(C.ByKana[sheetKana]); break;
       case 'close-sheet': closeSheet(); break;
       case 'theme': openThemeSheet(); break;
+      case 'open-scope': openScopeSheet(); break;
+      case 'open-goal': openGoalSheet(); break;
       case 'stroke-replay': if (x) Strokes.play(x.K); break;
-    }
-  });
-
-  document.addEventListener('change', function (e) {
-    if (e.target.id === 'scope') {
-      scope = e.target.value;
-      if (page === 'cards') { resetDeck(); render(); } else { startQuiz(scope); }
-    } else if (e.target.id === 'goal') {
-      progress.goal = Number(e.target.value); save(); render();
     }
   });
 
