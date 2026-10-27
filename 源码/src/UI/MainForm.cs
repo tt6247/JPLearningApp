@@ -74,6 +74,15 @@ namespace KanaSmallSteps
             Audio = new OfflineAudio(Path.Combine(Path.GetDirectoryName(p.Path), "audio"));
             Theme.Apply(p.Theme);
             Text = AppTitle;
+            try
+            {
+                // 窗口和任务栏图标：与安卓版启动图标相同（紫色圆角方块上的白色「あ」），来自 exe 内嵌的 app.ico（2.6.1）
+                base.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            }
+            catch
+            {
+                // 取不到图标时使用系统默认图标
+            }
             Font = Theme.Font(10f, false);
             BackColor = Theme.Paper;
             base.StartPosition = FormStartPosition.CenterScreen;

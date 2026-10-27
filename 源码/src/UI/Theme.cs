@@ -370,7 +370,8 @@ namespace KanaSmallSteps
             int bottom = r.Height - top;
             if (PairItem != null)
             {
-                PaintPair(e.Graphics, r, top);
+                // 平片对照（2.6.1）：「あ　a　ア」排成一行，罗马音夹在两种写法中间
+                PaintPair(e.Graphics, r, fill);
             }
             else
             {
@@ -382,10 +383,10 @@ namespace KanaSmallSteps
                     e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
                     e.Graphics.DrawString(Item.K, font, ink, new RectangleF(0, 2, r.Width, top), fmt);
                 }
-            }
-            using (Font font2 = new Font("Segoe UI", Math.Max(9f, r.Height * 0.17f), FontStyle.Regular, GraphicsUnit.Pixel))
-            {
-                TextRenderer.DrawText(e.Graphics, Item.R, font2, new Rectangle(0, top, r.Width, bottom), Theme.Muted, fill, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                using (Font font2 = new Font("Segoe UI", Math.Max(9f, r.Height * 0.17f), FontStyle.Regular, GraphicsUnit.Pixel))
+                {
+                    TextRenderer.DrawText(e.Graphics, Item.R, font2, new Rectangle(0, top, r.Width, bottom), Theme.Muted, fill, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
             }
             if (Learned)
             {
@@ -396,34 +397,61 @@ namespace KanaSmallSteps
             }
         }
 
-        /// <summary>左平假名、右片假名；已熟悉的写法下面画一条绿色短线。</summary>
-        private void PaintPair(Graphics g, Rectangle r, int top)
+        /// <summary>
+        /// 平片对照：左平假名、中间罗马音、右片假名，三者排成一行、整体居中；
+        /// 已熟悉的写法下面画一条绿色短线。格子太窄时整体按比例缩小。
+        /// </summary>
+        private void PaintPair(Graphics g, Rectangle r, Color fill)
         {
-            float size = Math.Max(11f, r.Height * (Item.K.Length > 1 ? 0.27f : 0.34f));
+            bool combo = Item.K.Length > 1;
+            float size = Math.Max(11f, r.Height * (combo ? 0.30f : 0.36f));
+            float romSize = Math.Max(9f, r.Height * 0.17f);
+            float gap = Math.Max(8f, r.Width * 0.05f);
+            float glyphW = size * (combo ? 1.9f : 1.05f);
+            float romW;
+            using (Font rf = new Font("Segoe UI", romSize, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                romW = TextRenderer.MeasureText(g, Item.R, rf, Size.Empty, TextFormatFlags.NoPadding).Width + 4;
+            }
+            float total = glyphW * 2 + romW + gap * 2;
+            float avail = r.Width * 0.92f;
+            if (total > avail)
+            {
+                float k = avail / total;
+                size *= k;
+                romSize = Math.Max(8f, romSize * k);
+                gap *= k;
+                glyphW *= k;
+                romW *= k;
+                total = avail;
+            }
+            float x0 = (r.Width - total) / 2f, cy = r.Height / 2f;
+            RectangleF left = new RectangleF(x0, 0, glyphW, r.Height);
+            RectangleF mid = new RectangleF(x0 + glyphW + gap, 0, romW, r.Height);
+            RectangleF right = new RectangleF(x0 + glyphW + gap + romW + gap, 0, glyphW, r.Height);
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             using (Font font = Theme.KanaFontPx(size))
             using (StringFormat fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            using (SolidBrush ink = new SolidBrush(Theme.Ink))
+            using (SolidBrush kata = new SolidBrush(Theme.Kata))
             {
-                float half = r.Width / 2f, inset = r.Width * 0.06f;
-                RectangleF left = new RectangleF(inset, 2, half - inset, top);
-                RectangleF right = new RectangleF(half, 2, half - inset, top);
-                using (SolidBrush ink = new SolidBrush(Theme.Ink))
-                using (SolidBrush kata = new SolidBrush(Theme.Kata))
+                g.DrawString(Item.K, font, ink, left, fmt);
+                g.DrawString(PairItem.K, font, kata, right, fmt);
+            }
+            using (Font rf = new Font("Segoe UI", romSize, FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                TextRenderer.DrawText(g, Item.R, rf, Rectangle.Round(mid), Theme.Muted, fill, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            }
+            float lineY = cy + size * 0.62f;
+            using (Pen pen = new Pen(Theme.Green, Math.Max(2f, r.Height * 0.03f)))
+            {
+                if (LearnedHira)
                 {
-                    g.DrawString(Item.K, font, ink, left, fmt);
-                    g.DrawString(PairItem.K, font, kata, right, fmt);
+                    g.DrawLine(pen, left.X + left.Width * 0.12f, lineY, left.Right - left.Width * 0.12f, lineY);
                 }
-                float lineY = 2 + top / 2f + size * 0.62f;
-                using (Pen pen = new Pen(Theme.Green, Math.Max(2f, r.Height * 0.03f)))
+                if (PairLearned)
                 {
-                    if (LearnedHira)
-                    {
-                        g.DrawLine(pen, left.X + left.Width * 0.25f, lineY, left.Right - left.Width * 0.25f, lineY);
-                    }
-                    if (PairLearned)
-                    {
-                        g.DrawLine(pen, right.X + right.Width * 0.25f, lineY, right.Right - right.Width * 0.25f, lineY);
-                    }
+                    g.DrawLine(pen, right.X + right.Width * 0.12f, lineY, right.Right - right.Width * 0.12f, lineY);
                 }
             }
         }

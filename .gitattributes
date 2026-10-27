@@ -8,3 +8,4 @@
 *.jks binary
 源码/src/Resources/KanaAudio/* binary
 *.ttf binary
+*.ico binary

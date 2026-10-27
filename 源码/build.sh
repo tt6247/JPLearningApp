@@ -9,7 +9,7 @@ CSC="$(ls -d "$(dirname "$(readlink -f "$(command -v dotnet)")")"/sdk/*/Roslyn/b
 mkdir -p "$(dirname "$OUT")"
 RSP="$(mktemp)"
 {
-  echo "-nologo -nostdlib -langversion:5 -target:winexe -platform:anycpu -optimize+ -deterministic -codepage:65001"
+  echo "-nologo -nostdlib -langversion:5 -target:winexe -win32icon:src/app.ico -platform:anycpu -optimize+ -deterministic -codepage:65001"
   echo "-win32manifest:src/app.manifest"
   for r in mscorlib System System.Core System.Drawing System.Windows.Forms System.Xml System.Xml.Linq; do echo "-r:$REF/$r.dll"; done
   for f in src/Resources/KanaAudio/*; do echo "-resource:$f,$(basename "$f")"; done

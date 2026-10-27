@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force (Split-Path $out) | Out-Null
 
 $cscArgs = @(
   '/nologo', '/langversion:5', '/target:winexe', '/platform:anycpu', '/optimize+', '/codepage:65001',
-  '/win32manifest:src\app.manifest',
+  '/win32manifest:src\app.manifest', '/win32icon:src\app.ico',
   '/r:System.dll', '/r:System.Core.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll',
   '/r:System.Xml.dll', '/r:System.Xml.Linq.dll',
   "/out:$out"   # 旧版 csc 要求 /out、/target 写在源文件之前
