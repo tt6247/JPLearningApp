@@ -208,5 +208,39 @@ section('katakana (2.5.0): 208 kana; mirrored groups; separate progress; pairing
   check(C.note(C.ByKana['シ']).indexOf('ツ') >= 0 && C.kataHint(C.ByKana['か']).indexOf('カ') >= 0, 'katakana hints');
 });
 
+section('word cards (2.6.0): word list; needed kana; readable deck order; unlock counts; romaji; saved marks', function () {
+  var vm = require('vm'), ctx = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'assets', 'www', 'data', 'words.js'), 'utf8'), ctx);
+  var W = C.Words, n = W.load(ctx.window.KANA_WORDS);
+  check(n >= 200 && n === ctx.window.KANA_WORDS.length, 'word list loaded (' + n + ')');
+  W.all().forEach(function (w) {
+    check(w.needs.length > 0 && w.needs.every(function (c) { return C.ByKana[c]; }), 'needs ' + w.K);
+    check(W.tokenize(w.K).join('') === w.K, 'tokenize ' + w.K);
+    check(w.zh.length > 0 && /^[a-z]+$/.test(w.romaji), 'gloss and romaji ' + w.K);
+    if (w.ex) check(W.tokenize(w.ex.replace(/ /g, '')).join('') === w.ex.replace(/ /g, '') && w.exZh, 'example ' + w.K);
+  });
+  check(W.needs('きって').join('') === 'きつて' && W.needs('コーヒー').join('') === 'コヒ' && W.needs('きょう').join('') === 'きょう', 'needs rules');
+  check(W.romaji('がっこう') === 'gakkou' && W.romaji('コーヒー') === 'koohii' && W.romaji('まっすぐ') === 'massugu' && W.romaji('きょう') === 'kyou', 'romaji rules');
+  var p = new C.Progress();
+  check(W.deck(p, 'all').length === 0, 'nothing readable at start');
+  C.groupById('a').items.forEach(function (x) { p.learned.add(x.K); });
+  var d = W.deck(p, 'all');
+  check(d.length > 0 && d.every(function (w) { return /^[あいうえお]+$/.test(w.K); }), 'vowel words only');
+  var gain = W.unlockBy(p, C.groupById('k'));
+  C.groupById('k').items.forEach(function (x) { p.learned.add(x.K); });
+  check(W.deck(p, 'all').length === d.length + gain, 'unlock count matches');
+  var d2 = W.deck(p, 'all');
+  for (var i = 1; i < d2.length; i++) check(d2[i - 1].order <= d2[i].order, 'deck sorted by unlock order');
+  check(W.locked(p, 'all').every(function (w) { return W.missing(w, p).length > 0; }), 'locked words list missing kana');
+  check(W.deck(p, 'kata').length === 0 && W.deck(p, 'hira').length === d2.length, 'script filter');
+  p.wordKnown(d2[0]);
+  check(p.words.has(d2[0].K) && W.deck(p, 'todo').length === d2.length - 1, 'known word leaves todo deck');
+  var r = C.Progress.fromJSON(JSON.parse(JSON.stringify(p.toJSON())));
+  check(r.words.has(d2[0].K) && r.words.size === 1, 'word marks persist');
+  check(C.Progress.fromJSON({ words: ['ねこ', 'zzz', 3] }).words.size === 1, 'sanitize words');
+  p.wordAgain(d2[0]); check(!p.words.has(d2[0].K), 'again clears mark');
+  check(W.notes(W.get('がっこう'))[0].indexOf('促音') >= 0 && W.notes(W.get('コーヒー'))[0].indexOf('长音') >= 0, 'notes');
+});
+
 console.log(results.join('\n'));
 console.log('全部 ' + results.length + ' 组通过');

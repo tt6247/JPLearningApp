@@ -162,6 +162,92 @@
     return shuffled ? shuffle(list, rng) : list;
   }
 
+  // ---------------- Words（单词卡，2.6.0） ----------------
+  /*
+   * 词表来自 data/words.js（JLPT N5，只收能用本应用假名读出的词），由页面调用 Words.load() 载入。
+   * 每个词需要哪些假名：按假名表的单位切分（拗音算一个单位）；小写「っ / ッ」按「つ / ツ」算，长音「ー」不单独要求。
+   * 单词只出「需要的假名都已熟悉」的词，按「最晚学到的那个假名」在五十音表中的位置排序。
+   */
+  var Words = (function () {
+    var list = [], byK = {};
+    function tokenize(text) {
+      var out = [];
+      for (var i = 0; i < text.length; i++) {
+        var two = text.substr(i, 2);
+        if (two.length === 2 && ByKana[two]) { out.push(two); i++; continue; }
+        var c = text.charAt(i);
+        if (ByKana[c] || c === 'っ' || c === 'ッ' || c === 'ー') out.push(c);
+      }
+      return out;
+    }
+    function needs(text) {
+      var out = [];
+      tokenize(text).forEach(function (u) {
+        if (u === 'ー') return;
+        if (u === 'っ') u = 'つ';
+        if (u === 'ッ') u = 'ツ';
+        if (out.indexOf(u) < 0) out.push(u);
+      });
+      return out;
+    }
+    function romaji(text) {
+      var units = tokenize(text), out = '', double = false;
+      units.forEach(function (u) {
+        if (u === 'っ' || u === 'ッ') { double = true; return; }
+        if (u === 'ー') { var v = out.match(/[aiueo]$/); if (v) out += v[0]; return; }
+        var r = ByKana[u].R;
+        if (double) { out += r.indexOf('ch') === 0 ? 't' : r.charAt(0); double = false; }
+        out += r;
+      });
+      return out;
+    }
+    function load(raw) {
+      list = []; byK = {};
+      (raw || []).forEach(function (r, i) {
+        if (!r || !r[0] || byK[r[0]]) return;
+        var n = needs(r[0]);
+        var w = {
+          K: r[0], zh: r[1] || '', kanji: r[2] || '', ex: r[3] || '', exZh: r[4] || '',
+          needs: n, romaji: romaji(r[0]), index: i,
+          script: /[\u30A0-\u30FF]/.test(r[0]) ? 'kata' : 'hira',
+          sokuon: /[っッ]/.test(r[0]), long: r[0].indexOf('ー') >= 0,
+          order: n.reduce(function (m, c) { return Math.max(m, All.indexOf(ByKana[c])); }, -1)
+        };
+        list.push(w); byK[w.K] = w;
+      });
+      list.sort(function (a, b) { return a.order - b.order || a.index - b.index; });
+      return list.length;
+    }
+    function canRead(text, p) { return needs(text).every(function (c) { return p.learned.has(c); }); }
+    function readable(w, p) { return w.needs.every(function (c) { return p.learned.has(c); }); }
+    function missing(w, p) { return w.needs.filter(function (c) { return !p.learned.has(c); }); }
+    function match(w, filter, p) {
+      return filter === 'hira' ? w.script === 'hira' : filter === 'kata' ? w.script === 'kata' : filter === 'todo' ? !p.words.has(w.K) : true;
+    }
+    function deck(p, filter) { return list.filter(function (w) { return readable(w, p) && match(w, filter, p); }); }
+    function locked(p, filter) { return list.filter(function (w) { return !readable(w, p) && match(w, filter, p); }); }
+    /** 学完某一组后能新解锁几个词。 */
+    function unlockBy(p, g) {
+      if (!g) return 0;
+      var extra = g.items.map(function (x) { return x.K; });
+      return list.filter(function (w) {
+        return !readable(w, p) && w.needs.every(function (c) { return p.learned.has(c) || extra.indexOf(c) >= 0; });
+      }).length;
+    }
+    /** 卡片背面的补充说明：促音、长音。 */
+    function notes(w) {
+      var out = [];
+      if (w.sokuon) out.push('小写的「' + (w.script === 'kata' ? 'ッ' : 'っ') + '」是促音：停顿一拍，再发下一个音。');
+      if (w.long) out.push('「ー」是长音：把前一个音拉长一拍。');
+      return out;
+    }
+    return {
+      load: load, tokenize: tokenize, needs: needs, romaji: romaji, readable: readable, canRead: canRead, missing: missing,
+      deck: deck, locked: locked, unlockBy: unlockBy, notes: notes,
+      all: function () { return list; }, get: function (k) { return byK[k] || null; }
+    };
+  })();
+
   // ---------------- Progress ----------------
   var GOAL_CHOICES = [5, 10, 15, 20, 30, 45, 60];
   var TIMER_CHOICES = [5, 10, 15, 25];
@@ -187,6 +273,7 @@
     this.timerState = null; // 计时器状态（安卓进程可能被系统回收，用于恢复）
     this.theme = 'system';  // 外观：system 跟随系统 / light 亮色护眼 / dark 深色护眼（2.2.0）
     this.script = 'hira';   // 五十音表显示的字形（2.5.0）
+    this.words = new Set(); // 已记住的单词（2.6.0）
     this.clock = function () { return new Date(); };
   }
 
@@ -203,6 +290,9 @@
     if (THEMES.indexOf(o.theme) >= 0) p.theme = o.theme;
     if (SCRIPTS.indexOf(o.script) >= 0) p.script = o.script;
     (Array.isArray(o.learned) ? o.learned : []).forEach(function (k) { if (ByKana[k]) p.learned.add(k); });
+    (Array.isArray(o.words) ? o.words : []).forEach(function (k) {
+      if (typeof k === 'string' && (Words.get(k) || (!Words.all().length && Words.tokenize(k).length === k.length))) p.words.add(k);
+    });
     if (o.errors && typeof o.errors === 'object') {
       Object.keys(o.errors).forEach(function (k) {
         var n = Math.floor(num(o.errors[k]));
@@ -242,7 +332,7 @@
     return {
       app: 'kana-small-steps', version: Progress.FILE_VERSION,
       answered: this.answered, correct: this.correct, goal: this.goal, timerMinutes: this.timerMinutes, theme: this.theme, script: this.script,
-      learned: learned, errors: this.errors, days: days, timerState: this.timerState
+      learned: learned, words: Array.from(this.words), errors: this.errors, days: days, timerState: this.timerState
     };
   };
 
@@ -318,6 +408,10 @@
   };
 
   Progress.prototype.errorCount = function () { return Object.keys(this.errors).length; };
+
+  /** 单词卡：记住了 / 还不熟（翻卡次数计入当天记录）。 */
+  Progress.prototype.wordKnown = function (w) { this.today().cards++; this.words.add(w.K); };
+  Progress.prototype.wordAgain = function (w) { this.today().cards++; this.words.delete(w.K); };
 
   // ---------------- Quiz ----------------
   /**
@@ -561,7 +655,7 @@
   };
 
   var api = {
-    VERSION: '2.5.1', THEMES: THEMES, SCRIPTS: SCRIPTS,
+    VERSION: '2.6.0', THEMES: THEMES, SCRIPTS: SCRIPTS, Words: Words,
     Groups: Groups, All: All, ByKana: ByKana, groupById: groupById, groupLabel: groupLabel, baseType: baseType, typeFor: typeFor,
     toKata: toKata, toHira: toHira, kataHint: kataHint,
     pool: pool, deck: deck, note: note, audioKey: audioKey, shuffle: shuffle,

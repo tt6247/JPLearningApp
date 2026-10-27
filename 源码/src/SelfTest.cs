@@ -209,6 +209,54 @@ namespace KanaSmallSteps
             return "PASS: katakana (2.5.0): 208 kana; mirrored groups; separate progress; pairing quiz; plan continues into katakana.";
         }
 
+        private static string WordTests(string folder)
+        {
+            int n = Words.All.Count;
+            Check(n >= 200, "word list loaded (" + n + ")");
+            foreach (Word w in Words.All)
+            {
+                Check(w.Needs.Count > 0 && w.Needs.All((string c) => Data.ByKana.ContainsKey(c)), "needs " + w.K);
+                Check(string.Join("", Words.Tokenize(w.K)) == w.K, "tokenize " + w.K);
+                Check(w.Zh.Length > 0 && System.Text.RegularExpressions.Regex.IsMatch(w.Romaji, "^[a-z]+$"), "gloss and romaji " + w.K);
+                if (w.Ex.Length > 0)
+                {
+                    Check(string.Join("", Words.Tokenize(w.Ex)) == w.Ex.Replace(" ", "") && w.ExZh.Length > 0, "example " + w.K);
+                }
+            }
+            Check(string.Join("", Words.NeedsOf("きって")) == "きつて" && string.Join("", Words.NeedsOf("コーヒー")) == "コヒ" && string.Join("", Words.NeedsOf("きょう")) == "きょう", "needs rules");
+            Check(Words.RomajiOf("がっこう") == "gakkou" && Words.RomajiOf("コーヒー") == "koohii" && Words.RomajiOf("まっすぐ") == "massugu" && Words.RomajiOf("きょう") == "kyou", "romaji rules");
+            Progress p = new Progress(Path.Combine(folder, "word-progress.xml"));
+            Check(Words.Deck(p, "all").Count == 0, "nothing readable at start");
+            foreach (Kana x in Data.GroupById("a").Items)
+            {
+                p.Learned.Add(x.K);
+            }
+            List<Word> d = Words.Deck(p, "all");
+            Check(d.Count > 0 && d.All((Word w) => w.K.All((char c) => "あいうえお".IndexOf(c) >= 0)), "vowel words only");
+            int gain = Words.UnlockBy(p, Data.GroupById("k"));
+            foreach (Kana x in Data.GroupById("k").Items)
+            {
+                p.Learned.Add(x.K);
+            }
+            List<Word> d2 = Words.Deck(p, "all");
+            Check(d2.Count == d.Count + gain, "unlock count matches");
+            for (int i = 1; i < d2.Count; i++)
+            {
+                Check(d2[i - 1].Order <= d2[i].Order, "deck sorted by unlock order");
+            }
+            Check(Words.Locked(p, "all").All((Word w) => Words.Missing(w, p).Count > 0), "locked words list missing kana");
+            Check(Words.Deck(p, "kata").Count == 0 && Words.Deck(p, "hira").Count == d2.Count, "script filter");
+            p.WordKnown(d2[0]);
+            Check(p.Words.Contains(d2[0].K) && Words.Deck(p, "todo").Count == d2.Count - 1, "known word leaves todo deck");
+            p.Save();
+            Progress r = Progress.Load(p.Path);
+            Check(r.Words.Contains(d2[0].K) && r.Words.Count == 1, "word marks persist");
+            p.WordAgain(d2[0]);
+            Check(!p.Words.Contains(d2[0].K), "again clears mark");
+            Check(Words.Notes(Words.Get("がっこう"))[0].Contains("促音") && Words.Notes(Words.Get("コーヒー"))[0].Contains("长音"), "notes");
+            return "PASS: word cards (2.6.0): " + n + " words; needed kana; readable deck order; unlock counts; romaji; saved marks.";
+        }
+
         private static string StrokeTests()
         {
             foreach (Kana k in Data.All)
@@ -379,6 +427,7 @@ namespace KanaSmallSteps
                 list.Add(PlanCompletionTests(folder));
                 list.Add(StrokeTests());
                 list.Add(KatakanaTests(folder));
+                list.Add(WordTests(folder));
                 Check(Data.All.Select(OfflineAudio.Key).Distinct().Count() == 104, "audio mapping");
                 foreach (Kana kk in Data.All)
                 {
@@ -434,8 +483,21 @@ namespace KanaSmallSteps
                     form.Navigate("quiz");
                     form.SetQuizMode("pair");
                     form.Navigate("cards");
+                    form.SetCardMode("words");
                 }
-                list.Add("PASS: all seven native Windows pages construct in light and dark eye-care themes; katakana chart, pairing quiz and cards construct.");
+                Progress wp = new Progress(progress.Path);
+                foreach (Kana x in Data.Pool("all", wp))
+                {
+                    wp.Learned.Add(x.K);
+                }
+                using (MainForm form = new MainForm(wp))
+                {
+                    form.Navigate("cards");
+                    form.SetCardMode("words");
+                    form.FlipWord();
+                    Check(form.Controls.Count > 0, "word cards view");
+                }
+                list.Add("PASS: all seven native Windows pages construct in light and dark eye-care themes; katakana chart, pairing quiz, kana and word cards construct.");
                 File.WriteAllLines(Path.Combine(folder, "result.txt"), list);
                 return 0;
             }

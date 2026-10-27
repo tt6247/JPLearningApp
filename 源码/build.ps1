@@ -22,6 +22,7 @@ $cscArgs = @(
 Get-ChildItem 'src\Resources\KanaAudio' -File | ForEach-Object { $cscArgs += "/resource:$($_.FullName),$($_.Name)" }
 Get-ChildItem 'src\Resources\Fonts' -File | ForEach-Object { $cscArgs += "/resource:$($_.FullName),Fonts.$($_.Name)" }
 Get-ChildItem 'src\Resources\Strokes' -File | ForEach-Object { $cscArgs += "/resource:$($_.FullName),Strokes.$($_.Name)" }
+Get-ChildItem 'src\Resources\Words' -File | ForEach-Object { $cscArgs += "/resource:$($_.FullName),Words.$($_.Name)" }
 Get-ChildItem 'src' -Recurse -Filter '*.cs' | Sort-Object FullName | ForEach-Object { $cscArgs += $_.FullName }
 
 & $csc @cscArgs

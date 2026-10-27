@@ -14,6 +14,8 @@
       return s ? JSON.parse(s) : null;
     } catch (e) { return null; }
   }
+  var W = C.Words;
+  W.load(window.KANA_WORDS || []); // 先载入词表，读取进度时才能校验已记住的单词
   var progress = C.Progress.fromJSON(loadRaw());
   var timer = Timer.restore(progress.timerState, progress.timerMinutes, Date.now());
   var unsaved = 0, saveWarned = false;
@@ -71,6 +73,7 @@
 
   // ---------- 状态 ----------
   var page = 'today', category = 'basic', tableMode = 'table', scope = 'basic', quizMode = 'read';
+  var cardMode = 'kana', wordFilter = 'all', wordIndex = 0, wordFlipped = false; // 记忆卡：假名 / 单词（2.6.0）
   var deck = [], deckShuffled = false, cardIndex = 0, flipped = false, quiz = null, sheetKana = null;
   var view = document.getElementById('view');
   function $(id) { return document.getElementById(id); }
@@ -385,8 +388,64 @@
   function moveCard(n) { if (!deck.length) return; cardIndex = (cardIndex + n + deck.length) % deck.length; flipped = false; render(); }
 
   // ---------- 记忆卡 ----------
+  function cardModeTabs() {
+    return '<div class="seg" role="tablist" aria-label="记忆卡类型"><button data-card-mode="kana" class="' + (cardMode === 'kana' ? 'active' : '') + '">假名</button>' +
+      '<button data-card-mode="words" class="' + (cardMode === 'words' ? 'active' : '') + '">单词</button></div>';
+  }
+
+  // ---------- 单词卡（2.6.0）：只出用已熟悉的假名能读出来的词，没有配音 ----------
+  function wordDeck() { return W.deck(progress, wordFilter); }
+  function renderWords() {
+    var html = heading('认识的假名，拼成单词。', '看着假名读出来，再翻开看中文意思。每多熟悉一个假名，就会解锁新的词。');
+    html += cardModeTabs();
+    var all = W.all(), canRead = W.deck(progress, 'all'), known = canRead.filter(function (w) { return progress.words.has(w.K); }).length;
+    var next = Plan.nextGroup(progress), gain = W.unlockBy(progress, next);
+    html += '<div class="wmeter"><div class="row"><span>能读的词</span><strong>' + canRead.length + '<span> / ' + all.length + '</span></strong></div>' +
+      '<div class="bar green"><i style="width:' + pct(canRead.length, all.length) + '%"></i></div>' +
+      '<div class="row hint"><span>已记住 ' + known + ' 个</span><span>' + (next && gain ? '再学「' + C.groupLabel(next) + '」可解锁 ' + gain + ' 个' : '') + '</span></div></div>';
+    html += '<div class="chips" role="tablist" aria-label="单词范围">' + [['all', '全部'], ['hira', '平假名词'], ['kata', '片假名词'], ['todo', '还没记住']].map(function (c) {
+      return '<button class="chip' + (wordFilter === c[0] ? ' on' : '') + '" data-word-filter="' + c[0] + '" aria-pressed="' + (wordFilter === c[0]) + '">' + c[1] + '</button>';
+    }).join('') + '</div>';
+    var d = wordDeck();
+    if (!d.length) {
+      html += '<div class="card empty-state"><strong>' + (canRead.length ? (wordFilter === 'todo' ? '能读的词都记住了' : '这个范围还没有能读的词') : '还没有能读的词') + '</strong>' +
+        (canRead.length ? '换个范围看看，或者去学下一行假名，解锁更多单词。' : '先在「假名」卡里记住几个假名，比如「あ い う え お」，就能读出第一个词。') + '</div>';
+    } else {
+      if (wordIndex >= d.length) wordIndex = 0;
+      var w = d[wordIndex], kata = w.script === 'kata';
+      var back = '';
+      if (wordFlipped) {
+        back = '<div class="wback"><div class="answer">' + w.zh + '</div><div class="hint">' + (w.kanji ? '汉字写法 <b class="kanji">' + w.kanji + '</b> · ' : '') + w.romaji + '</div>';
+        if (w.ex && W.canRead(w.ex, progress)) back += '<div class="wex"><span lang="ja">' + w.ex + '</span>　' + w.exZh + '</div>';
+        W.notes(w).forEach(function (n) { back += '<div class="wnote">' + n + '</div>'; });
+        back += '</div>';
+      }
+      html += '<div class="row hint"><span>单词卡 · ' + (kata ? '片假名词' : '平假名词') + (progress.words.has(w.K) ? ' · 已记住' : '') + '</span><span>' + (wordIndex + 1) + ' / ' + d.length + '</span></div>' +
+        '<div class="bar" style="margin:6px 0 14px"><i style="width:' + ((wordIndex + 1) / d.length * 100) + '%"></i></div>' +
+        '<button class="flash word-card" data-act="word-flip" aria-label="' + w.K + (wordFlipped ? '，' + w.zh : '，点击翻开') + '"><div class="wword' + (kata ? ' kk' : '') + '" lang="ja">' + w.K + '</div>' +
+        (wordFlipped ? back : '<div class="hint">先读出来，再点卡片看中文意思</div>') + '</button>' +
+        '<div class="btns even"><button class="btn outline" data-act="word-prev">上一张</button><button class="btn outline" data-act="word-next">下一张</button></div>';
+      if (wordFlipped) html += '<div class="btns even"><button class="btn" data-act="word-again">还不熟</button><button class="btn primary" data-act="word-know">记住了 ✓</button></div>';
+    }
+    // 词表：能读的词全部列出；还不能读的只列接下来的 12 个，并标出还差哪几个假名
+    var lockedList = W.locked(progress, wordFilter === 'todo' ? 'all' : wordFilter);
+    html += '<section class="card wlist"><div class="row"><h2>词表</h2><span class="hint">' + d.length + ' 个能读</span></div>' +
+      (d.length ? '<div class="wgrid">' + d.map(function (x, i) {
+        return '<button class="witem' + (i === wordIndex ? ' cur' : '') + '" data-word="' + i + '"><span class="w' + (x.script === 'kata' ? ' kk' : '') + '" lang="ja">' + x.K + '</span><span class="m">' + x.zh + '</span>' +
+          (progress.words.has(x.K) ? '<span class="st">✓</span>' : '') + '</button>';
+      }).join('') + '</div>' : '') +
+      (lockedList.length ? '<h3 class="wlocked-h">还不能读 · ' + lockedList.length + ' 个</h3><div class="wgrid">' + lockedList.slice(0, 12).map(function (x) {
+        return '<div class="witem locked"><span class="w" lang="ja">' + x.K + '</span><span class="m">还差 ' + W.missing(x, progress).map(function (c) { return '<b lang="ja">' + c + '</b>'; }).join(' ') + '</span></div>';
+      }).join('') + '</div>' + (lockedList.length > 12 ? '<p class="hint">另有 ' + (lockedList.length - 12) + ' 个词，学会更多假名后解锁。</p>' : '') : '') + '</section>';
+    html += '<p class="hint small">词表选自 JLPT N5 词汇（Jonathan Waller，CC BY），中文释义为本应用编写。</p>';
+    view.innerHTML = html;
+  }
+  function moveWord(n) { var d = wordDeck(); if (!d.length) return; wordIndex = (wordIndex + n + d.length) % d.length; wordFlipped = false; render(); }
+
   function renderCards() {
+    if (cardMode === 'words') { renderWords(); return; }
     var html = heading('先回想，再翻开答案。', '看着假名试着读出来。点卡片核对答案，再决定是否熟悉。');
+    html += cardModeTabs();
     html += '<div class="row" style="margin-bottom:12px">' + scopePicker() + '<button class="btn" data-act="shuffle">' + (deckShuffled ? '按五十音顺序' : '打乱顺序') + '</button></div>';
     if (!deck.length) {
       html += '<div class="card empty-state"><strong>' + (scope === 'learned' ? '还没有已熟悉的假名' : '当前范围没有可学习的假名') + '</strong>请切换学习范围。</div>';
@@ -581,6 +640,8 @@
       '<p>先学 46 个清音，再学浊音、半浊音和常用拗音。平假名都熟悉后，「今日」会接着推荐片假名；之后还要学习词汇与语法，才能逐步阅读喜欢的故事。</p></div>' +
       '<div class="card"><h2 style="margin-top:0">片假名</h2><p>片假名和平假名读音完全相同，多用于外来语（コーヒー 咖啡）、拟声词和强调。五十音表顶部可以切换「平假名 / 片假名 / 平片对照」；两种写法的熟悉状态分开记。</p>' +
       '<p>测验里的「平片配对」会给出一种写法，让你选出另一种写法，专门练两者的对应。注意形近的 シ / ツ、ソ / ン。</p></div>' +
+      '<div class="card"><h2 style="margin-top:0">单词卡</h2><p>「记忆卡」顶部切换到「单词」，就能用学过的假名读真正的日语单词。单词卡只出你已经熟悉的假名能拼出来的词，每多熟悉一个假名就会解锁新的词；背面有中文意思、汉字写法和例句。单词卡没有配音，读音靠你刚学会的假名。</p>' +
+      '<p class="small">词表：选自 JLPT N5 词汇表，Jonathan Waller（https://www.tanos.co.uk/jlpt/），授权 CC BY；经 open-anki-jlpt-decks 整理。中文释义、汉字写法说明和例句为本应用编写。</p></div>' +
       '<div class="card"><h2 style="margin-top:0">使用与进度</h2><p>104 个发音片段内置在应用中（片假名与平假名共用），无需联网。进度自动保存在本机，卸载应用会删除进度。手机版与电脑版的进度各自独立。</p>' +
       '<p class="small">版本 ' + C.VERSION + (call('dataPath') ? ' · 进度文件：' + call('dataPath') : '') + '</p></div>' +
       '<div class="card"><h2 style="margin-top:0">录音来源与授权</h2><p class="small">录音：FUN Japanese Learning（https://funjapaneselearning.com）。<br>数据集整理：Arsalan Anwari，Kana Sounds。<br>https://huggingface.co/datasets/arsalan-anwari/kana-sounds<br>' +
@@ -663,6 +724,9 @@
     if (d.goalOpt) { setGoal(Number(d.goalOpt)); return; }
     if (d.step !== undefined && deck[cardIndex]) { Strokes.pin(deck[cardIndex].K, Number(d.step)); return; }
     if (d.cat) { category = d.cat; render(); return; }
+    if (d.cardMode) { if (cardMode !== d.cardMode) { cardMode = d.cardMode; wordFlipped = false; render(); window.scrollTo(0, 0); } return; }
+    if (d.wordFilter) { wordFilter = d.wordFilter; wordIndex = 0; wordFlipped = false; render(); return; }
+    if (d.word !== undefined) { wordIndex = Number(d.word); wordFlipped = false; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     if (d.script) { progress.script = d.script; save(); render(); return; }
     if (d.quizMode) { if (quizMode !== d.quizMode) { quizMode = d.quizMode; quiz = newQuiz(scope); render(); } return; }
     if (d.mark) { var mk = sheetKana; progress.toggleLearned(C.ByKana[d.mark]); save(); render(); showKana(mk); return; }
@@ -706,6 +770,21 @@
       case 'review-quiz': startQuiz('errors'); break;
       case 'listen-sheet': if (sheetKana) speak(C.ByKana[sheetKana]); break;
       case 'close-sheet': closeSheet(); break;
+      case 'word-flip': wordFlipped = !wordFlipped; render(); break;
+      case 'word-prev': moveWord(-1); break;
+      case 'word-next': moveWord(1); break;
+      case 'word-know': case 'word-again': {
+        var wd = wordDeck(), cur = wd[wordIndex];
+        if (cur) {
+          if (d.act === 'word-know') progress.wordKnown(cur); else progress.wordAgain(cur);
+          save();
+          // 「还没记住」范围里记住一个词后，它会移出牌组：保持当前位置即可看到下一个
+          if (!(wordFilter === 'todo' && d.act === 'word-know')) wordIndex++;
+          var len = wordDeck().length; if (wordIndex >= len) wordIndex = 0;
+          wordFlipped = false; render();
+        }
+        break;
+      }
       case 'theme': openThemeSheet(); break;
       case 'open-scope': openScopeSheet(); break;
       case 'open-goal': openGoalSheet(); break;

@@ -49,6 +49,9 @@ namespace KanaSmallSteps
 
         public HashSet<string> Learned = new HashSet<string>();
 
+        /// <summary>单词卡里已记住的词（2.6.0）。</summary>
+        public HashSet<string> Words = new HashSet<string>();
+
         public Dictionary<string, int> Errors = new Dictionary<string, int>();
 
         public Dictionary<string, DayLog> Days = new Dictionary<string, DayLog>();
@@ -161,6 +164,14 @@ namespace KanaSmallSteps
             {
                 Script = script;
             }
+            foreach (XElement item in root.Elements("word"))
+            {
+                string w = (string)item.Attribute("value");
+                if (w != null && KanaSmallSteps.Words.Get(w) != null)
+                {
+                    Words.Add(w);
+                }
+            }
             foreach (XElement item in root.Elements("kana"))
             {
                 string text = (string)item.Attribute("value");
@@ -212,6 +223,10 @@ namespace KanaSmallSteps
                     new XAttribute("timer", TimerMinutes),
                     new XAttribute("theme", Theme),
                     new XAttribute("script", Script));
+                foreach (string w in Words.OrderBy(k => k, StringComparer.Ordinal))
+                {
+                    root.Add(new XElement("word", new XAttribute("value", w)));
+                }
                 foreach (Kana item in Data.All)
                 {
                     int review;
@@ -357,6 +372,19 @@ namespace KanaSmallSteps
         }
 
         /// <summary>记忆卡「我记住了」。</summary>
+        /// <summary>单词卡：记住了 / 还不熟（翻卡次数计入当天记录）。</summary>
+        public void WordKnown(Word w)
+        {
+            Today.Cards++;
+            Words.Add(w.K);
+        }
+
+        public void WordAgain(Word w)
+        {
+            Today.Cards++;
+            Words.Remove(w.K);
+        }
+
         public void CardKnown(Kana x)
         {
             DayLog log = Today;

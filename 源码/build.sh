@@ -15,6 +15,7 @@ RSP="$(mktemp)"
   for f in src/Resources/KanaAudio/*; do echo "-resource:$f,$(basename "$f")"; done
   for f in src/Resources/Fonts/*; do echo "-resource:$f,Fonts.$(basename "$f")"; done
   for f in src/Resources/Strokes/*; do echo "-resource:$f,Strokes.$(basename "$f")"; done
+  for f in src/Resources/Words/*; do echo "-resource:$f,Words.$(basename "$f")"; done
   find src -name '*.cs' | sort
   echo "-out:$OUT"
 } > "$RSP"

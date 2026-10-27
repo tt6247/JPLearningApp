@@ -46,6 +46,15 @@ namespace KanaSmallSteps
         /// <summary>记忆卡是否打乱顺序；默认按五十音表顺序。</summary>
         private bool DeckShuffled;
 
+        /// <summary>记忆卡类型：kana 假名 / words 单词（2.6.0）。</summary>
+        private string CardMode = "kana";
+
+        private string WordFilter = "all";
+
+        private int WordIndex;
+
+        private bool WordFlipped;
+
         private Quiz Test;
 
         /// <summary>测验题型：read 看字选读音 / pair 平片配对（2.5.0）。</summary>
@@ -657,9 +666,262 @@ namespace KanaSmallSteps
             }
         }
 
+        private FlowLayoutPanel CardModeBar()
+        {
+            Label label = Theme.Label("类型", 10f, false, 34);
+            label.Width = 76;
+            label.Dock = DockStyle.None;
+            return Actions(label, Theme.Button("假名", delegate
+            {
+                SetCardMode("kana");
+            }, CardMode == "kana"), Theme.Button("单词", delegate
+            {
+                SetCardMode("words");
+            }, CardMode == "words"));
+        }
+
+        internal void SetCardMode(string mode)
+        {
+            if (CardMode != mode)
+            {
+                CardMode = mode;
+                WordFlipped = false;
+                Render();
+            }
+        }
+
+        private void MoveWord(int by)
+        {
+            List<Word> d = Words.Deck(State, WordFilter);
+            if (d.Count > 0)
+            {
+                WordIndex = (WordIndex + by + d.Count) % d.Count;
+                WordFlipped = false;
+                Render();
+            }
+        }
+
+        /// <summary>单词卡（2.6.0）：只出用已熟悉的假名能读出来的词，没有配音。与安卓版 renderWords 对应。</summary>
+        private void RenderWords()
+        {
+            BeginPage("认识的假名，拼成单词。", "看着假名读出来，再翻开看中文意思。每多熟悉一个假名，就会解锁新的词。");
+            Add(CardModeBar());
+            List<Word> canRead = Words.Deck(State, "all");
+            KanaGroup next = DailyPlan.NextGroup(State);
+            int gain = Words.UnlockBy(State, next);
+            StatsRow(new string[3] { "能读的词", "已记住", "下一步" }, new string[3]
+            {
+                canRead.Count + " / " + Words.All.Count,
+                canRead.Count((Word w) => State.Words.Contains(w.K)) + " 个",
+                (next != null && gain > 0) ? "学「" + Data.GroupLabel(next) + "」解锁 " + gain + " 个" : "继续巩固"
+            });
+            string[,] filters = new string[4, 2] { { "all", "全部" }, { "hira", "平假名词" }, { "kata", "片假名词" }, { "todo", "还没记住" } };
+            FlowLayoutPanel bar = Actions();
+            for (int i = 0; i < 4; i++)
+            {
+                string id = filters[i, 0];
+                bar.Controls.Add(Theme.Button(filters[i, 1], delegate
+                {
+                    WordFilter = id;
+                    WordIndex = 0;
+                    WordFlipped = false;
+                    Render();
+                }, WordFilter == id));
+            }
+            Add(bar);
+            List<Word> d = Words.Deck(State, WordFilter);
+            if (d.Count == 0)
+            {
+                Add(Theme.Label(canRead.Count == 0 ? "还没有能读的词。先在「假名」卡里记住几个假名，比如「あ い う え お」，就能读出第一个词。" :
+                    (WordFilter == "todo" ? "能读的词都记住了。去学下一行假名，解锁更多单词。" : "这个范围还没有能读的词。换个范围看看，或者去学下一行假名。"), 13f, true, 90));
+            }
+            else
+            {
+                if (WordIndex >= d.Count)
+                {
+                    WordIndex = 0;
+                }
+                Word w = d[WordIndex];
+                bool kata = w.Script == "kata";
+                Add(Theme.Label("单词卡 · " + (kata ? "片假名词" : "平假名词") + (State.Words.Contains(w.K) ? " · 已记住" : "") + "    " + (WordIndex + 1) + " / " + d.Count, 10f, false, 30));
+                Card card = new Card { Height = WordFlipped ? 330 : 230, Padding = new Padding(1) };
+                TableLayoutPanel face = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Margin = new Padding(0), BackColor = Theme.Surface };
+                face.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                KanaGlyph glyph = new KanaGlyph(w.K, w.K.Length > 4 ? 44f : 56f) { Dock = DockStyle.Fill, Cursor = Cursors.Hand, Clickable = true, BackColor = Theme.Surface };
+                if (kata)
+                {
+                    glyph.ForeColor = Theme.Kata;
+                }
+                glyph.AccessibleName = w.K + (WordFlipped ? "，" + w.Zh : "，点击翻开");
+                glyph.AccessibleRole = AccessibleRole.PushButton;
+                glyph.Click += delegate
+                {
+                    WordFlipped = !WordFlipped;
+                    Render();
+                };
+                face.RowStyles.Add(new RowStyle(SizeType.Absolute, 150f));
+                face.Controls.Add(glyph, 0, 0);
+                if (WordFlipped)
+                {
+                    List<string> lines = new List<string>();
+                    lines.Add((w.Kanji.Length > 0 ? "汉字写法 " + w.Kanji + "  ·  " : "") + w.Romaji);
+                    if (w.Ex.Length > 0 && Words.CanRead(w.Ex, State))
+                    {
+                        lines.Add("例句：" + w.Ex + "　" + w.ExZh);
+                    }
+                    lines.AddRange(Words.Notes(w));
+                    Label zh = Theme.Label(w.Zh, 22f, true, 46);
+                    zh.TextAlign = ContentAlignment.MiddleCenter;
+                    zh.ForeColor = Theme.Purple;
+                    zh.BackColor = Theme.Surface;
+                    zh.Dock = DockStyle.Fill;
+                    Label more = Theme.Label(string.Join("\n", lines), 10.5f, false, 120);
+                    more.TextAlign = ContentAlignment.TopCenter;
+                    more.BackColor = Theme.Surface;
+                    more.Dock = DockStyle.Fill;
+                    face.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));
+                    face.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+                    face.Controls.Add(zh, 0, 1);
+                    face.Controls.Add(more, 0, 2);
+                }
+                else
+                {
+                    Label hint = Theme.Label("先读出来，再点卡片看中文意思", 10f, false, 40);
+                    hint.TextAlign = ContentAlignment.MiddleCenter;
+                    hint.BackColor = Theme.Surface;
+                    hint.Dock = DockStyle.Fill;
+                    face.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+                    face.Controls.Add(hint, 0, 1);
+                }
+                card.Controls.Add(face);
+                Add(card);
+                Add(Actions(Theme.Button("翻开 / 隐藏", delegate
+                {
+                    WordFlipped = !WordFlipped;
+                    Render();
+                }, false), Theme.Button("上一张", delegate
+                {
+                    MoveWord(-1);
+                }, false), Theme.Button("下一张", delegate
+                {
+                    MoveWord(1);
+                }, false)));
+                if (WordFlipped)
+                {
+                    Add(Actions(Theme.Button("还不熟", delegate
+                    {
+                        State.WordAgain(w);
+                        Save();
+                        AfterWordMark(false);
+                    }, false), Theme.Button("记住了 ✓", delegate
+                    {
+                        State.WordKnown(w);
+                        Save();
+                        AfterWordMark(true);
+                    }, true)));
+                }
+            }
+            // 词表：能读的词全部列出；还不能读的只列接下来的 12 个，并标出还差哪几个假名
+            Add(Theme.Label("词表 · " + d.Count + " 个能读", 15f, true, 40));
+            if (d.Count > 0)
+            {
+                Add(WordGrid(d.Select((Word x, int i) => new KeyValuePair<Word, int>(x, i)).ToList(), true));
+            }
+            List<Word> locked = Words.Locked(State, WordFilter == "todo" ? "all" : WordFilter);
+            if (locked.Count > 0)
+            {
+                Add(Theme.Label("还不能读 · " + locked.Count + " 个" + (locked.Count > 12 ? "（先列出接下来的 12 个）" : ""), 11f, false, 32));
+                Add(WordGrid(locked.Take(12).Select((Word x) => new KeyValuePair<Word, int>(x, -1)).ToList(), false));
+            }
+            Add(Theme.Label("词表选自 JLPT N5 词汇（Jonathan Waller，CC BY），中文释义为本程序编写。", 9f, false, 30));
+            FinishPage();
+        }
+
+        /// <summary>自检用：翻开当前单词卡。</summary>
+        internal void FlipWord()
+        {
+            WordFlipped = !WordFlipped;
+            Render();
+        }
+
+        private void AfterWordMark(bool known)
+        {
+            // 「还没记住」范围里记住一个词后，它会移出牌组：保持当前位置即可看到下一个
+            if (!(WordFilter == "todo" && known))
+            {
+                WordIndex++;
+            }
+            if (WordIndex >= Words.Deck(State, WordFilter).Count)
+            {
+                WordIndex = 0;
+            }
+            WordFlipped = false;
+            Render();
+        }
+
+        private TableLayoutPanel WordGrid(List<KeyValuePair<Word, int>> items, bool readable)
+        {
+            int cols = 4;
+            int rows = (items.Count + cols - 1) / cols;
+            TableLayoutPanel grid = new TableLayoutPanel { ColumnCount = cols, RowCount = rows, Height = rows * 46, Margin = new Padding(0) };
+            for (int i = 0; i < cols; i++)
+            {
+                grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            }
+            for (int j = 0; j < rows; j++)
+            {
+                grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 46f));
+            }
+            for (int k = 0; k < items.Count; k++)
+            {
+                Word x = items[k].Key;
+                int index = items[k].Value;
+                string text = readable
+                    ? x.K + "  " + x.Zh + (State.Words.Contains(x.K) ? "  ✓" : "")
+                    : x.K + "  还差 " + string.Join(" ", Words.Missing(x, State));
+                Button b = Theme.Button(text, delegate
+                {
+                    if (index >= 0)
+                    {
+                        WordIndex = index;
+                        WordFlipped = false;
+                        Render();
+                    }
+                }, readable && index == WordIndex);
+                b.AutoSize = false;
+                b.Dock = DockStyle.Fill;
+                b.Margin = new Padding(3);
+                b.TextAlign = ContentAlignment.MiddleLeft;
+                b.Font = Theme.Font(10.5f, false);
+                b.AutoEllipsis = true;
+                if (!readable)
+                {
+                    b.BackColor = Theme.Paper;
+                    b.ForeColor = Theme.Muted;
+                    b.FlatAppearance.BorderSize = 1;
+                    b.FlatAppearance.BorderColor = Theme.Line;
+                    b.Cursor = Cursors.Default;
+                    b.TabStop = false;
+                }
+                else if (index != WordIndex)
+                {
+                    b.BackColor = Theme.Surface;
+                    b.ForeColor = x.Script == "kata" ? Theme.Kata : Theme.Ink;
+                }
+                grid.Controls.Add(b, k % cols, k / cols);
+            }
+            return grid;
+        }
+
         private void RenderCards()
         {
+            if (CardMode == "words")
+            {
+                RenderWords();
+                return;
+            }
             BeginPage("先回想，再翻开答案。", "看着假名试着读出来。点卡片核对答案，再决定是否熟悉。");
+            Add(CardModeBar());
             Add(ScopeBar(false));
             if (Deck.Count == 0)
             {
@@ -961,6 +1223,8 @@ namespace KanaSmallSteps
             Add(Theme.Label("罗马音是临时提示，不是中文拼音。し读 shi、ち读 chi、つ读 tsu、ふ读 fu；ら行不等于英语 r。を通常读 o；は、へ作助词时读 wa、e。\n\n先学 46 个清音，再学浊音、半浊音和常用拗音。拗音有小写的ゃ、ゅ、ょ，与前字一起占一拍。平假名都熟悉后，「今日计划」会接着推荐片假名；之后还要学习词汇与语法，才能逐步阅读喜欢的故事。", 11f, false, 172));
             Add(Theme.Label("片假名", 17f, true, 44));
             Add(Theme.Label("片假名和平假名读音完全相同，多用于外来语（コーヒー 咖啡）、拟声词和强调。五十音表和分组学习顶部可以切换「平假名 / 片假名 / 平片对照」；两种写法的熟悉状态分开记。\n测验里的「平片配对」会给出一种写法，让你选出另一种写法，专门练两者的对应。注意形近的 シ / ツ、ソ / ン。", 11f, false, 98));
+            Add(Theme.Label("单词卡", 17f, true, 44));
+            Add(Theme.Label("「记忆卡」顶部切换到「单词」，就能用学过的假名读真正的日语单词。单词卡只出你已经熟悉的假名能拼出来的词，每多熟悉一个假名就会解锁新的词；背面有中文意思、汉字写法和例句。单词卡没有配音，读音靠你刚学会的假名。\n词表：选自 JLPT N5 词汇表，Jonathan Waller（https://www.tanos.co.uk/jlpt/），授权 CC BY；经 open-anki-jlpt-decks 整理。中文释义、汉字写法说明和例句为本程序编写。", 11f, false, 118));
             Add(Theme.Label("使用与进度", 17f, true, 44));
             Add(Theme.Label("这是原生 Windows 桌面程序，不调用浏览器或 WebView，也无需联网。104 个发音片段内置在程序中（片假名与平假名共用），无需额外安装日语语音包。进度自动保存在本机；关闭再打开可继续学习。网页版本的浏览器进度不会自动迁移。", 11f, false, 115));
             Add(Theme.Label("录音来源与授权", 17f, true, 44));
