@@ -640,8 +640,8 @@
       '<p>先学 46 个清音，再学浊音、半浊音和常用拗音。平假名都熟悉后，「今日」会接着推荐片假名；之后还要学习词汇与语法，才能逐步阅读喜欢的故事。</p></div>' +
       '<div class="card"><h2 style="margin-top:0">片假名</h2><p>片假名和平假名读音完全相同，多用于外来语（コーヒー 咖啡）、拟声词和强调。五十音表顶部可以切换「平假名 / 片假名 / 平片对照」；两种写法的熟悉状态分开记。</p>' +
       '<p>测验里的「平片配对」会给出一种写法，让你选出另一种写法，专门练两者的对应。注意形近的 シ / ツ、ソ / ン。</p></div>' +
-      '<div class="card"><h2 style="margin-top:0">单词卡</h2><p>「记忆卡」顶部切换到「单词」，就能用学过的假名读真正的日语单词。单词卡只出你已经熟悉的假名能拼出来的词，每多熟悉一个假名就会解锁新的词；背面有中文意思、汉字写法和例句。单词卡没有配音，读音靠你刚学会的假名。</p>' +
-      '<p class="small">词表：选自 JLPT N5 词汇表，Jonathan Waller（https://www.tanos.co.uk/jlpt/），授权 CC BY；经 open-anki-jlpt-decks 整理。中文释义、汉字写法说明和例句为本应用编写。</p></div>' +
+      '<div class="card"><h2 style="margin-top:0">单词卡</h2><p>「记忆卡」顶部切换到「单词」，就能用学过的假名读真正的日语单词。单词卡只出你已经熟悉的假名能拼出来的词，每多熟悉一个假名就会解锁新的词；背面有中文意思、汉字写法，部分词附一个常用搭配。单词卡没有配音，读音靠你刚学会的假名。</p>' +
+      '<p class="small">词表：选自 JLPT N5 词汇表，Jonathan Waller（https://www.tanos.co.uk/jlpt/），授权 CC BY；经 open-anki-jlpt-decks 整理。中文释义、汉字写法说明和搭配为本应用编写。</p></div>' +
       '<div class="card"><h2 style="margin-top:0">使用与进度</h2><p>104 个发音片段内置在应用中（片假名与平假名共用），无需联网。进度自动保存在本机，卸载应用会删除进度。手机版与电脑版的进度各自独立。</p>' +
       '<p class="small">版本 ' + C.VERSION + (call('dataPath') ? ' · 进度文件：' + call('dataPath') : '') + '</p></div>' +
       '<div class="card"><h2 style="margin-top:0">录音来源与授权</h2><p class="small">录音：FUN Japanese Learning（https://funjapaneselearning.com）。<br>数据集整理：Arsalan Anwari，Kana Sounds。<br>https://huggingface.co/datasets/arsalan-anwari/kana-sounds<br>' +

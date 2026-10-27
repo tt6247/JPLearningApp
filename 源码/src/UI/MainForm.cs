@@ -767,7 +767,7 @@ namespace KanaSmallSteps
                     lines.Add((w.Kanji.Length > 0 ? "汉字写法 " + w.Kanji + "  ·  " : "") + w.Romaji);
                     if (w.Ex.Length > 0 && Words.CanRead(w.Ex, State))
                     {
-                        lines.Add("例句：" + w.Ex + "　" + w.ExZh);
+                        lines.Add("搭配：" + w.Ex + "　" + w.ExZh);
                     }
                     lines.AddRange(Words.Notes(w));
                     Label zh = Theme.Label(w.Zh, 22f, true, 46);
@@ -1224,7 +1224,7 @@ namespace KanaSmallSteps
             Add(Theme.Label("片假名", 17f, true, 44));
             Add(Theme.Label("片假名和平假名读音完全相同，多用于外来语（コーヒー 咖啡）、拟声词和强调。五十音表和分组学习顶部可以切换「平假名 / 片假名 / 平片对照」；两种写法的熟悉状态分开记。\n测验里的「平片配对」会给出一种写法，让你选出另一种写法，专门练两者的对应。注意形近的 シ / ツ、ソ / ン。", 11f, false, 98));
             Add(Theme.Label("单词卡", 17f, true, 44));
-            Add(Theme.Label("「记忆卡」顶部切换到「单词」，就能用学过的假名读真正的日语单词。单词卡只出你已经熟悉的假名能拼出来的词，每多熟悉一个假名就会解锁新的词；背面有中文意思、汉字写法和例句。单词卡没有配音，读音靠你刚学会的假名。\n词表：选自 JLPT N5 词汇表，Jonathan Waller（https://www.tanos.co.uk/jlpt/），授权 CC BY；经 open-anki-jlpt-decks 整理。中文释义、汉字写法说明和例句为本程序编写。", 11f, false, 118));
+            Add(Theme.Label("「记忆卡」顶部切换到「单词」，就能用学过的假名读真正的日语单词。单词卡只出你已经熟悉的假名能拼出来的词，每多熟悉一个假名就会解锁新的词；背面有中文意思、汉字写法，部分词附一个常用搭配。单词卡没有配音，读音靠你刚学会的假名。\n词表：选自 JLPT N5 词汇表，Jonathan Waller（https://www.tanos.co.uk/jlpt/），授权 CC BY；经 open-anki-jlpt-decks 整理。中文释义、汉字写法说明和搭配为本程序编写。", 11f, false, 118));
             Add(Theme.Label("使用与进度", 17f, true, 44));
             Add(Theme.Label("这是原生 Windows 桌面程序，不调用浏览器或 WebView，也无需联网。104 个发音片段内置在程序中（片假名与平假名共用），无需额外安装日语语音包。进度自动保存在本机；关闭再打开可继续学习。网页版本的浏览器进度不会自动迁移。", 11f, false, 115));
             Add(Theme.Label("录音来源与授权", 17f, true, 44));
