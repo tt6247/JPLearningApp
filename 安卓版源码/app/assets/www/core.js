@@ -655,7 +655,7 @@
   };
 
   var api = {
-    VERSION: '2.6.1', THEMES: THEMES, SCRIPTS: SCRIPTS, Words: Words,
+    VERSION: '2.6.2', THEMES: THEMES, SCRIPTS: SCRIPTS, Words: Words,
     Groups: Groups, All: All, ByKana: ByKana, groupById: groupById, groupLabel: groupLabel, baseType: baseType, typeFor: typeFor,
     toKata: toKata, toHira: toHira, kataHint: kataHint,
     pool: pool, deck: deck, note: note, audioKey: audioKey, shuffle: shuffle,

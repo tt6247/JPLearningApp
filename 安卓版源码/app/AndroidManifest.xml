@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 版本号与桌面版同步：versionName = 桌面版 ProductVersion，versionCode = 主*10000 + 次*100 + 修订 -->
+<!-- 版本号与桌面版同步：versionName = 桌面版 ProductVersion。
+     versionCode 自 2.6.2 起为 主*10000 + 次*100 + 修订 + 10000（2.6.2 = 30602），
+     要大于曾经测试过的 Flutter 3.0 的 30000，装过 3.0 的手机才能直接覆盖安装。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.kanasmallsteps.app"
-    android:versionCode="20601"
-    android:versionName="2.6.1">
+    android:versionCode="30602"
+    android:versionName="2.6.2">
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
 
